@@ -1,0 +1,985 @@
+<!DOCTYPE html>
+
+<html lang="en" data-content_root="../../">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="generator" content="Docutils 0.18.1: http://docutils.sourceforge.net/" />
+
+    <title>TS-DAR Tutorial for HP35 &#8212; TS-DAR Example Gallery 1 documentation</title>
+    <link rel="stylesheet" type="text/css" href="../../_static/pygments.css?v=61cd365c" />
+    <link rel="stylesheet" type="text/css" href="../../_static/alabaster.css?v=12dfc556" />
+    <link rel="stylesheet" type="text/css" href="../../_static/sg_gallery.css?v=d2d258e8" />
+    <link rel="stylesheet" type="text/css" href="../../_static/nbsphinx-code-cells.css?v=2aa19091" />
+    <script src="../../_static/documentation_options.js?v=29a6c3e3"></script>
+    <script src="../../_static/doctools.js?v=9a2dae69"></script>
+    <script src="../../_static/sphinx_highlight.js?v=dc90522c"></script>
+    <script crossorigin="anonymous" integrity="sha256-Ae2Vz/4ePdIu6ZyI/5ZGsYnb+m0JlOmKPjt6XZ9JJkA=" src="https://cdnjs.cloudflare.com/ajax/libs/require.js/2.3.4/require.min.js"></script>
+    <script>window.MathJax = {"tex": {"inlineMath": [["$", "$"], ["\\(", "\\)"]], "processEscapes": true}, "options": {"ignoreHtmlClass": "tex2jax_ignore|mathjax_ignore|document", "processHtmlClass": "tex2jax_process|mathjax_process|math|output_area"}}</script>
+    <script defer="defer" src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+    <link rel="index" title="Index" href="../../genindex.html" />
+    <link rel="search" title="Search" href="../../search.html" />
+   
+  <link rel="stylesheet" href="../../_static/custom.css" type="text/css" />
+  
+
+  
+  
+
+  </head><body>
+  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          
+
+          <div class="body" role="main">
+            
+  <section id="TS-DAR-Tutorial-for-HP35">
+<h1>TS-DAR Tutorial for HP35<a class="headerlink" href="#TS-DAR-Tutorial-for-HP35" title="Link to this heading">¶</a></h1>
+<p><strong>Reference</strong>: Liu, B., Boysen, J.G., Unarta, I.C. et al. Exploring transition states of protein conformational changes via out-of-distribution detection in the hyperspherical latent space. Nat Commun 16, 349 (2025). <a class="reference external" href="https://doi.org/10.1038/s41467-024-55228-4">https://doi.org/10.1038/s41467-024-55228-4</a></p>
+<section id="TS-DAR-Framework:-An-Overview">
+<h2>TS-DAR Framework: An Overview<a class="headerlink" href="#TS-DAR-Framework:-An-Overview" title="Link to this heading">¶</a></h2>
+<p>In this notebook, we introduce <strong>Transition State identification via Dispersion and vAriational principle Regularized neural networks (TS-DAR)</strong>, a computational framework that utilizes out-of-distribution (OOD) detection to accurately and simultaneously identify transition states involved in specific biomolecular conformational changes. TS-DAR leverages a deep learning model to map protein conformations from molecular dynamics (MD) simulations into a hyperspherical latent space. This
+low-dimensional representation preserves the essential kinetic information while still capturing the protein’s dynamic behavior. To distinguish metastable states from transition states, TS-DAR employs a VAMP-2 loss and dispersion loss function:</p>
+<ol class="arabic simple">
+<li><p><strong>VAMP-2 Loss:</strong> Encourages the latent representation to capture the slow dynamics of the system by maximizing correlations between time-lagged data.</p></li>
+<li><p><strong>Dispersion Loss:</strong> Ensures that the latent space does not collapse by promoting a well-dispersed representation of the macrostates.</p></li>
+</ol>
+</section>
+<section id="Before-starting,-make-sure-you-have-done-the-following:">
+<h2>Before starting, make sure you have done the following:<a class="headerlink" href="#Before-starting,-make-sure-you-have-done-the-following:" title="Link to this heading">¶</a></h2>
+<section id="1.-Download-and-install-Anaconda:">
+<h3>1. Download and install Anaconda:<a class="headerlink" href="#1.-Download-and-install-Anaconda:" title="Link to this heading">¶</a></h3>
+<p>wget <a class="reference external" href="https://repo.anaconda.com/archive/Anaconda3-2024.06-1-Linux-x86_64.sh">https://repo.anaconda.com/archive/Anaconda3-2024.06-1-Linux-x86_64.sh</a> ./Anaconda3-2024.06-1-Linux-x86_64.sh #### 2. Create a new conda environment and install the ts-dar source code locally: conda create -n ts-dar python=3.9 conda activate ts-dar #### 3. Install dependencies !pip install matplotlib numpy==1.26.1 scipy==1.11.4 torch==1.13.1 tqdm==4.66.1 #### 4. Clone the repository !git clone <a class="reference external" href="https://github.com/xuhuihuang/ts-dar.git">https://github.com/xuhuihuang/ts-dar.git</a> #### 5. Install the package !python -m pip install ./ts-dar</p>
+<div class="nbinput nblast docutils container">
+<div class="prompt highlight-none notranslate"><div class="highlight"><pre><span></span>[1]:
+</pre></div>
+</div>
+<div class="input_area highlight-ipython3 notranslate"><div class="highlight"><pre><span></span><span class="kn">import</span> <span class="nn">os</span>
+<span class="kn">import</span> <span class="nn">numpy</span> <span class="k">as</span> <span class="nn">np</span>
+<span class="kn">import</span> <span class="nn">torch</span>
+<span class="kn">import</span> <span class="nn">torch.nn</span> <span class="k">as</span> <span class="nn">nn</span>
+<span class="kn">import</span> <span class="nn">matplotlib.pyplot</span> <span class="k">as</span> <span class="nn">plt</span>
+
+<span class="kn">from</span> <span class="nn">torch.utils.data.dataloader</span> <span class="kn">import</span> <span class="n">DataLoader</span>
+<span class="kn">from</span> <span class="nn">torch.utils.data</span> <span class="kn">import</span> <span class="n">random_split</span>
+
+<span class="kn">from</span> <span class="nn">tsdar.utils</span> <span class="kn">import</span> <span class="n">set_random_seed</span>
+<span class="kn">from</span> <span class="nn">tsdar.loss</span> <span class="kn">import</span> <span class="n">Prototypes</span>
+<span class="kn">from</span> <span class="nn">tsdar.model</span> <span class="kn">import</span> <span class="n">TSDAR</span><span class="p">,</span> <span class="n">TSDARLayer</span><span class="p">,</span> <span class="n">TSDARModel</span><span class="p">,</span> <span class="n">TSDAREstimator</span>
+<span class="kn">from</span> <span class="nn">tsdar.dataprocessing</span> <span class="kn">import</span> <span class="n">Preprocessing</span>
+</pre></div>
+</div>
+</div>
+</section>
+</section>
+<section id="Load-the-HP35-Data:">
+<h2>Load the HP35 Data:<a class="headerlink" href="#Load-the-HP35-Data:" title="Link to this heading">¶</a></h2>
+<div class="nbinput nblast docutils container">
+<div class="prompt highlight-none notranslate"><div class="highlight"><pre><span></span>[2]:
+</pre></div>
+</div>
+<div class="input_area highlight-ipython3 notranslate"><div class="highlight"><pre><span></span><span class="n">data</span> <span class="o">=</span> <span class="p">[]</span>
+<span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="mi">153</span><span class="p">):</span>
+    <span class="n">filename</span> <span class="o">=</span> <span class="s2">&quot;./HP35_data/ftraj_</span><span class="si">%03d</span><span class="s2">.npy&quot;</span> <span class="o">%</span> <span class="n">i</span>
+    <span class="k">if</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">exists</span><span class="p">(</span><span class="n">filename</span><span class="p">):</span>  <span class="c1"># Check if file exists</span>
+        <span class="n">data</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">load</span><span class="p">(</span><span class="n">filename</span><span class="p">))</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Warning: </span><span class="si">{</span><span class="n">filename</span><span class="si">}</span><span class="s2"> not found.&quot;</span><span class="p">)</span>
+</pre></div>
+</div>
+</div>
+</section>
+<section id="Visualize-the-VAMP-2-Loss:">
+<h2>Visualize the VAMP-2 Loss:<a class="headerlink" href="#Visualize-the-VAMP-2-Loss:" title="Link to this heading">¶</a></h2>
+<p>The VAMP-2 loss is derived from the Variational Approach for Markov Processes, which aims to extract the slow collective variables from the data. Given an MD trajectory of length <span class="math notranslate nohighlight">\(T\)</span>, a batch of transition pairs <span class="math notranslate nohighlight">\(\{(x_t, x_{t+\tau})\}_{t=1}^b\)</span> with lag time, <span class="math notranslate nohighlight">\(\tau\)</span>, is sampled. This produces two batches of data: <span class="math notranslate nohighlight">\(\mathbf{B} = [x_1, x_2, \dots, x_b]^T\)</span> and <span class="math notranslate nohighlight">\(\mathbf{\hat{B}} = [x_{1+\tau}, x_{2+\tau}, \dots, x_{b+\tau}]^T\)</span>, which are fed into two parallel network
+lobes with shared parameters. Each lobe outputs SoftMax-transformed basis functions (<span class="math notranslate nohighlight">\(\chi\)</span>) applied to the input features, yielding: <span class="math notranslate nohighlight">\(\mathbf{X} = [\chi(x_1), \dots, \chi(x_b)]^T\)</span> and <span class="math notranslate nohighlight">\(\mathbf{Y} = [\chi(x_{1+\tau}), \dots, \chi(x_{b+\tau})]^T\)</span>. The remove-mean time-instantaneous (<span class="math notranslate nohighlight">\(\bar{\mathbf{C}}_{00}\)</span> and <span class="math notranslate nohighlight">\(\bar{\mathbf{C}}_{11}\)</span>) and time-lagged (<span class="math notranslate nohighlight">\(\bar{\mathbf{C}}_{01}\)</span>) correlation matrices can then be calculated as follows:</p>
+<div class="math notranslate nohighlight">
+\[\bar{\mathbf{C}}_{00} = \frac{1}{T - \tau} \mathbf{X}^T \mathbf{X} - \boldsymbol{\pi}_0 \boldsymbol{\pi}_0^T\]</div>
+<div class="math notranslate nohighlight">
+\[\bar{\mathbf{C}}_{11} = \frac{1}{T - \tau} \mathbf{Y}^T \mathbf{Y} - \boldsymbol{\pi}_1 \boldsymbol{\pi}_1^T\]</div>
+<div class="math notranslate nohighlight">
+\[\bar{\mathbf{C}}_{01} = \frac{1}{T - \tau} \mathbf{X}^T \mathbf{Y} - \boldsymbol{\pi}_0 \boldsymbol{\pi}_1^T\]</div>
+<p>where <span class="math notranslate nohighlight">\(\boldsymbol{\pi}_0\)</span> and <span class="math notranslate nohighlight">\(\boldsymbol{\pi}_1\)</span> are mean vectors of <span class="math notranslate nohighlight">\(\mathbf{X}\)</span> and <span class="math notranslate nohighlight">\(\mathbf{Y}\)</span>, respectively, given by: <span class="math notranslate nohighlight">\(\boldsymbol{\pi}_0\)</span> = <span class="math notranslate nohighlight">\(\frac{1}{T - \tau} \mathbf{X}^T \mathbf{1}\)</span> and <span class="math notranslate nohighlight">\(\boldsymbol{\pi}_1\)</span> = <span class="math notranslate nohighlight">\(\frac{1}{T - \tau} \mathbf{Y}^T \mathbf{1}\)</span>. These correlation matrices are then used to calculate the VAMP-2 loss, which is defined as:</p>
+<div class="math notranslate nohighlight">
+\[\mathcal{L}_{\text{vamp2}} = - \left\| \bar{\mathbf{C}}_{00}^{-\frac{1}{2}} \bar{\mathbf{C}}_{01} \bar{\mathbf{C}}_{11}^{-\frac{1}{2}} \right\|_{\mathcal{F}}^2 - 1\]</div>
+<p>Minimizing this loss drives the model to learn latent features that capture the slow dynamical modes in the molecular system.</p>
+<div class="nbinput docutils container">
+<div class="prompt highlight-none notranslate"><div class="highlight"><pre><span></span>[21]:
+</pre></div>
+</div>
+<div class="input_area highlight-ipython3 notranslate"><div class="highlight"><pre><span></span><span class="n">val_vamp</span> <span class="o">=</span> <span class="p">[]</span>
+<span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="mi">5</span><span class="p">):</span>
+    <span class="n">j</span><span class="o">=</span><span class="n">i</span><span class="o">+</span><span class="mi">1</span>
+    <span class="n">file_path</span><span class="o">=</span><span class="sa">rf</span><span class="s1">&#39;./trained_model_examples/</span><span class="si">{</span><span class="n">j</span><span class="si">}</span><span class="s1">/validation_vamp.npy&#39;</span>
+    <span class="n">dip</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">load</span><span class="p">(</span><span class="n">file_path</span><span class="p">)</span>
+    <span class="n">val_vamp</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">dip</span><span class="p">)</span>
+
+<span class="c1"># Define custom colors for the line and markers</span>
+<span class="n">line_color</span> <span class="o">=</span> <span class="s1">&#39;royalblue&#39;</span>
+<span class="n">marker_face</span> <span class="o">=</span> <span class="s1">&#39;white&#39;</span>
+
+<span class="n">plt</span><span class="o">.</span><span class="n">rcParams</span><span class="p">[</span><span class="s1">&#39;font.size&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="mi">35</span>
+
+<span class="c1"># Plot with custom colors, line width, and markers</span>
+<span class="n">fig</span> <span class="o">=</span> <span class="n">plt</span><span class="o">.</span><span class="n">figure</span><span class="p">(</span><span class="n">figsize</span><span class="o">=</span><span class="p">(</span><span class="mi">8</span><span class="p">,</span> <span class="mi">6</span><span class="p">))</span>
+<span class="k">for</span> <span class="n">idx</span><span class="p">,</span> <span class="n">dip</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">val_vamp</span><span class="p">):</span>
+    <span class="n">plt</span><span class="o">.</span><span class="n">plot</span><span class="p">(</span><span class="n">dip</span><span class="p">,</span> <span class="n">linewidth</span><span class="o">=</span><span class="mi">2</span><span class="p">,</span> <span class="n">marker</span><span class="o">=</span><span class="s1">&#39;o&#39;</span><span class="p">,</span> <span class="n">markersize</span><span class="o">=</span><span class="mi">6</span><span class="p">,</span> <span class="n">markerfacecolor</span><span class="o">=</span><span class="n">marker_face</span><span class="p">,</span> <span class="n">linestyle</span><span class="o">=</span><span class="s1">&#39;-&#39;</span><span class="p">,</span> <span class="n">label</span><span class="o">=</span><span class="sa">f</span><span class="s1">&#39;Train </span><span class="si">{</span><span class="n">idx</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="si">}</span><span class="s1">&#39;</span><span class="p">)</span>
+
+<span class="c1"># Set the axis labels</span>
+<span class="n">plt</span><span class="o">.</span><span class="n">xlabel</span><span class="p">(</span><span class="s1">&#39;Training Epochs&#39;</span><span class="p">,</span> <span class="n">fontsize</span><span class="o">=</span><span class="mi">20</span><span class="p">)</span>
+<span class="n">plt</span><span class="o">.</span><span class="n">ylabel</span><span class="p">(</span><span class="s1">&#39;VAMP-2 Loss&#39;</span><span class="p">,</span> <span class="n">fontsize</span><span class="o">=</span><span class="mi">20</span><span class="p">)</span>
+
+<span class="n">plt</span><span class="o">.</span><span class="n">yticks</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">arange</span><span class="p">(</span><span class="mi">3</span><span class="p">,</span> <span class="mf">4.1</span><span class="p">,</span> <span class="mf">0.2</span><span class="p">))</span>
+<span class="n">plt</span><span class="o">.</span><span class="n">xticks</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">arange</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="mi">35</span><span class="p">,</span> <span class="mi">5</span><span class="p">))</span>
+
+<span class="c1"># Customize tick parameters for readability</span>
+<span class="n">plt</span><span class="o">.</span><span class="n">xticks</span><span class="p">(</span><span class="n">fontsize</span><span class="o">=</span><span class="mf">17.5</span><span class="p">)</span>
+<span class="n">plt</span><span class="o">.</span><span class="n">yticks</span><span class="p">(</span><span class="n">fontsize</span><span class="o">=</span><span class="mf">17.5</span><span class="p">)</span>
+<span class="n">plt</span><span class="o">.</span><span class="n">gca</span><span class="p">()</span><span class="o">.</span><span class="n">set_box_aspect</span><span class="p">(</span><span class="mf">0.85</span><span class="p">)</span>
+
+<span class="c1"># Add a dashed grid to improve the readability of the plot</span>
+<span class="n">plt</span><span class="o">.</span><span class="n">grid</span><span class="p">(</span><span class="n">alpha</span><span class="o">=</span><span class="mf">0.3</span><span class="p">,</span> <span class="n">linestyle</span><span class="o">=</span><span class="s1">&#39;--&#39;</span><span class="p">)</span>
+<span class="n">plt</span><span class="o">.</span><span class="n">legend</span><span class="p">(</span><span class="n">loc</span><span class="o">=</span><span class="s1">&#39;lower right&#39;</span><span class="p">,</span> <span class="n">fontsize</span><span class="o">=</span><span class="mi">14</span><span class="p">,</span> <span class="n">markerscale</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span> <span class="n">ncol</span><span class="o">=</span><span class="mi">1</span><span class="p">)</span>
+
+<span class="c1"># Adjust the layout to ensure everything fits well</span>
+<span class="n">plt</span><span class="o">.</span><span class="n">tight_layout</span><span class="p">()</span>
+
+<span class="c1"># Display the plot</span>
+<span class="n">plt</span><span class="o">.</span><span class="n">show</span><span class="p">()</span>
+</pre></div>
+</div>
+</div>
+<div class="nboutput nblast docutils container">
+<div class="prompt empty docutils container">
+</div>
+<div class="output_area docutils container">
+<img alt="../../_images/examples_hp35_HP35_6_0.png" src="../../_images/examples_hp35_HP35_6_0.png" />
+</div>
+</div>
+</section>
+<section id="Visualize-the-Dispersion-Loss:">
+<h2>Visualize the Dispersion Loss:<a class="headerlink" href="#Visualize-the-Dispersion-Loss:" title="Link to this heading">¶</a></h2>
+<p>While the VAMP-2 loss focuses on capturing the slow dynamics, it can sometimes result in a latent space where the features collapse to similar values. To counteract this, we incorporate a <strong>dispersion loss</strong> that encourages diversity in the latent space. One way to formulate the dispersion loss is by ensuring that the pairwise distances between latent representations are close to a target mean distance. The dispersion loss is defined as:</p>
+<div class="math notranslate nohighlight">
+\[\mathcal{L}_{dis} = \frac{1}{C} \sum_{i=1}^{C} \log \frac{1}{C-1} \sum_{j=1}^{C} \mathbf{1}_{\{j \neq i\}} e^{\frac{\mu_i^T \mu_j}{\sigma}}\]</div>
+<p>where:</p>
+<ul class="simple">
+<li><p><span class="math notranslate nohighlight">\(C\)</span> corresponds to the number of states.</p></li>
+<li><p><span class="math notranslate nohighlight">\(\mu_i\)</span> is a unit vector representing the mean direction of all conformations (i.e., the state center) in state <span class="math notranslate nohighlight">\(i\)</span>.</p></li>
+<li><p><span class="math notranslate nohighlight">\(\sigma\)</span> is a scaling hyperparameter, which is specifically defined as 0.1.</p></li>
+<li><p><span class="math notranslate nohighlight">\(\mathbf{1}_{\{j \neq i\}}\)</span> is an indicator function that equals 1 when <span class="math notranslate nohighlight">\(j \neq i\)</span> (i.e., excluding self-similarity) and 0 when <span class="math notranslate nohighlight">\(j = i\)</span>.</p></li>
+</ul>
+<p>This loss penalizes deviations from the target dispersion, ensuring that the latent features remain well-separated and informative.</p>
+<div class="nbinput docutils container">
+<div class="prompt highlight-none notranslate"><div class="highlight"><pre><span></span>[23]:
+</pre></div>
+</div>
+<div class="input_area highlight-ipython3 notranslate"><div class="highlight"><pre><span></span><span class="c1"># Define custom colors for the line and markers</span>
+<span class="n">line_color</span> <span class="o">=</span> <span class="s1">&#39;royalblue&#39;</span>
+<span class="n">marker_face</span> <span class="o">=</span> <span class="s1">&#39;white&#39;</span>
+<span class="c1">#marker_edge = &#39;royalblue&#39;</span>
+
+<span class="n">val_dip</span> <span class="o">=</span> <span class="p">[]</span>
+<span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="mi">5</span><span class="p">):</span>
+    <span class="n">j</span><span class="o">=</span><span class="n">i</span><span class="o">+</span><span class="mi">1</span>
+    <span class="n">file_path</span><span class="o">=</span><span class="sa">f</span><span class="s1">&#39;./trained_model_examples/</span><span class="si">{</span><span class="n">j</span><span class="si">}</span><span class="s1">/validation_dis.npy&#39;</span>
+    <span class="n">dip</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">load</span><span class="p">(</span><span class="n">file_path</span><span class="p">)</span>
+    <span class="n">val_dip</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">dip</span><span class="p">)</span>
+
+<span class="n">plt</span><span class="o">.</span><span class="n">rcParams</span><span class="p">[</span><span class="s1">&#39;font.size&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="mi">35</span>
+<span class="n">plt</span><span class="o">.</span><span class="n">figure</span><span class="p">(</span><span class="n">figsize</span><span class="o">=</span><span class="p">(</span><span class="mi">8</span><span class="p">,</span> <span class="mi">6</span><span class="p">))</span>
+<span class="k">for</span> <span class="n">idx</span><span class="p">,</span> <span class="n">dip</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">val_dip</span><span class="p">):</span>
+    <span class="n">plt</span><span class="o">.</span><span class="n">plot</span><span class="p">(</span><span class="n">dip</span><span class="p">,</span> <span class="n">linewidth</span><span class="o">=</span><span class="mi">2</span><span class="p">,</span> <span class="n">marker</span><span class="o">=</span><span class="s1">&#39;o&#39;</span><span class="p">,</span> <span class="n">markersize</span><span class="o">=</span><span class="mi">6</span><span class="p">,</span> <span class="n">markerfacecolor</span><span class="o">=</span><span class="n">marker_face</span><span class="p">,</span> <span class="n">linestyle</span><span class="o">=</span><span class="s1">&#39;-&#39;</span><span class="p">,</span> <span class="n">label</span><span class="o">=</span><span class="sa">f</span><span class="s1">&#39;Train </span><span class="si">{</span><span class="n">idx</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="si">}</span><span class="s1">&#39;</span><span class="p">)</span>
+
+<span class="c1"># Set the axis labels</span>
+<span class="n">plt</span><span class="o">.</span><span class="n">xlabel</span><span class="p">(</span><span class="s1">&#39;Training Epochs&#39;</span><span class="p">,</span> <span class="n">fontsize</span><span class="o">=</span><span class="mi">20</span><span class="p">)</span>
+<span class="n">plt</span><span class="o">.</span><span class="n">ylabel</span><span class="p">(</span><span class="s1">&#39;Dispersion Loss&#39;</span><span class="p">,</span> <span class="n">fontsize</span><span class="o">=</span><span class="mi">20</span><span class="p">)</span>
+<span class="c1">#plt.ylim(0, 2.25)</span>
+<span class="c1">#plt.yticks(np.arange(0, 2.1, 0.5))</span>
+<span class="n">plt</span><span class="o">.</span><span class="n">xticks</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">arange</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="mi">35</span><span class="p">,</span> <span class="mi">5</span><span class="p">))</span>
+
+<span class="c1"># Customize tick parameters for readability</span>
+<span class="n">plt</span><span class="o">.</span><span class="n">xticks</span><span class="p">(</span><span class="n">fontsize</span><span class="o">=</span><span class="mf">17.5</span><span class="p">)</span>
+<span class="n">plt</span><span class="o">.</span><span class="n">yticks</span><span class="p">(</span><span class="n">fontsize</span><span class="o">=</span><span class="mf">17.5</span><span class="p">)</span>
+<span class="n">plt</span><span class="o">.</span><span class="n">gca</span><span class="p">()</span><span class="o">.</span><span class="n">set_box_aspect</span><span class="p">(</span><span class="mf">0.85</span><span class="p">)</span>
+<span class="n">plt</span><span class="o">.</span><span class="n">legend</span><span class="p">(</span><span class="n">loc</span><span class="o">=</span><span class="s1">&#39;upper right&#39;</span><span class="p">,</span> <span class="n">fontsize</span><span class="o">=</span><span class="mi">14</span><span class="p">,</span> <span class="n">markerscale</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span> <span class="n">ncol</span><span class="o">=</span><span class="mi">1</span><span class="p">)</span>
+
+<span class="c1"># Add a dashed grid to improve the readability of the plot</span>
+<span class="n">plt</span><span class="o">.</span><span class="n">grid</span><span class="p">(</span><span class="n">alpha</span><span class="o">=</span><span class="mf">0.3</span><span class="p">,</span> <span class="n">linestyle</span><span class="o">=</span><span class="s1">&#39;--&#39;</span><span class="p">)</span>
+
+<span class="c1"># Adjust the layout to ensure everything fits well</span>
+<span class="n">plt</span><span class="o">.</span><span class="n">tight_layout</span><span class="p">()</span>
+
+<span class="c1"># Display the plot</span>
+<span class="n">plt</span><span class="o">.</span><span class="n">show</span><span class="p">()</span>
+</pre></div>
+</div>
+</div>
+<div class="nboutput nblast docutils container">
+<div class="prompt empty docutils container">
+</div>
+<div class="output_area docutils container">
+<img alt="../../_images/examples_hp35_HP35_8_0.png" src="../../_images/examples_hp35_HP35_8_0.png" />
+</div>
+</div>
+<div class="nbinput nblast docutils container">
+<div class="prompt highlight-none notranslate"><div class="highlight"><pre><span></span>[5]:
+</pre></div>
+</div>
+<div class="input_area highlight-ipython3 notranslate"><div class="highlight"><pre><span></span><span class="c1"># Initialize with specified hidden layer sizes and number of output states</span>
+<span class="n">lobe</span> <span class="o">=</span> <span class="n">TSDARLayer</span><span class="p">([</span><span class="mi">528</span><span class="p">,</span><span class="mi">200</span><span class="p">,</span><span class="mi">100</span><span class="p">,</span><span class="mi">50</span><span class="p">,</span><span class="mi">25</span><span class="p">,</span><span class="mi">10</span><span class="p">,</span><span class="mi">3</span><span class="p">],</span><span class="n">n_states</span><span class="o">=</span><span class="mi">4</span><span class="p">)</span>
+
+<span class="c1"># Load a pre-trained model - the model was trained for 30 epochs</span>
+<span class="n">lobe</span><span class="o">.</span><span class="n">load_state_dict</span><span class="p">(</span><span class="n">torch</span><span class="o">.</span><span class="n">load</span><span class="p">(</span><span class="s1">&#39;./trained_model_examples/3/model_30epochs.pytorch&#39;</span><span class="p">,</span> <span class="n">map_location</span><span class="o">=</span><span class="n">torch</span><span class="o">.</span><span class="n">device</span><span class="p">(</span><span class="s1">&#39;cpu&#39;</span><span class="p">)))</span>
+<span class="n">tsdar_model</span> <span class="o">=</span> <span class="n">TSDARModel</span><span class="p">(</span><span class="n">lobe</span><span class="o">=</span><span class="n">lobe</span><span class="p">)</span>
+
+<span class="c1"># Use the model to transform the input data into low-dimensional representations on the surface of a hypersphere</span>
+<span class="n">features</span> <span class="o">=</span> <span class="n">tsdar_model</span><span class="o">.</span><span class="n">transform</span><span class="p">(</span><span class="n">data</span><span class="p">,</span><span class="n">return_type</span><span class="o">=</span><span class="s1">&#39;hypersphere_embs&#39;</span><span class="p">)</span>
+
+<span class="c1"># Use the same model to assign each frame in the input trajectory to one of the learned states</span>
+<span class="n">lumped_trajs</span> <span class="o">=</span> <span class="n">tsdar_model</span><span class="o">.</span><span class="n">transform</span><span class="p">(</span><span class="n">data</span><span class="p">,</span><span class="n">return_type</span><span class="o">=</span><span class="s1">&#39;states&#39;</span><span class="p">)</span> <span class="c1"># State Assignment</span>
+</pre></div>
+</div>
+</div>
+<div class="nbinput docutils container">
+<div class="prompt highlight-none notranslate"><div class="highlight"><pre><span></span>[6]:
+</pre></div>
+</div>
+<div class="input_area highlight-ipython3 notranslate"><div class="highlight"><pre><span></span><span class="c1"># Initialize the TS-DAR Estimator to compute metastable state centers</span>
+<span class="n">tsdar_estimator</span> <span class="o">=</span> <span class="n">TSDAREstimator</span><span class="p">(</span><span class="n">tsdar_model</span><span class="p">)</span><span class="o">.</span><span class="n">fit</span><span class="p">(</span><span class="n">data</span><span class="p">)</span>
+
+<span class="c1"># These scores indicate how far each point is from its assigned state&#39;s center, which helps detect rare conformations</span>
+<span class="n">ood_scores</span> <span class="o">=</span> <span class="n">tsdar_estimator</span><span class="o">.</span><span class="n">ood_scores</span>
+
+<span class="c1"># Extract the learned centers (means) of each state in the latent hypersphere embedding space</span>
+<span class="n">state_centers</span> <span class="o">=</span> <span class="n">tsdar_estimator</span><span class="o">.</span><span class="n">state_centers</span>
+
+<span class="nb">print</span><span class="p">(</span><span class="n">state_centers</span><span class="p">)</span>
+</pre></div>
+</div>
+</div>
+<div class="nboutput nblast docutils container">
+<div class="prompt empty docutils container">
+</div>
+<div class="output_area docutils container">
+<div class="highlight"><pre>
+[[-0.27191687 -0.83422726 -0.47971457]
+ [-0.5415171   0.7496386  -0.38052765]
+ [-0.16964732 -0.0948611   0.9809287 ]
+ [ 0.9731338   0.179747   -0.14388044]]
+</pre></div></div>
+</div>
+</section>
+<section id="StateAnalyzer:">
+<h2>StateAnalyzer:<a class="headerlink" href="#StateAnalyzer:" title="Link to this heading">¶</a></h2>
+<p>The <code class="docutils literal notranslate"><span class="pre">StateAnalyzer</span></code> identifies key frames from MD data by identifying those closest to state centers and high OOD-scoring frames near state transitions in a learned embedding space.</p>
+<div class="nbinput nblast docutils container">
+<div class="prompt highlight-none notranslate"><div class="highlight"><pre><span></span>[7]:
+</pre></div>
+</div>
+<div class="input_area highlight-ipython3 notranslate"><div class="highlight"><pre><span></span><span class="kn">import</span> <span class="nn">numpy</span> <span class="k">as</span> <span class="nn">np</span>
+<span class="kn">import</span> <span class="nn">pandas</span> <span class="k">as</span> <span class="nn">pd</span>
+<span class="kn">import</span> <span class="nn">warnings</span>
+
+<span class="k">class</span> <span class="nc">StateAnalyzer</span><span class="p">:</span>
+    <span class="k">def</span> <span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">state_centers</span><span class="p">,</span> <span class="n">features</span><span class="p">,</span> <span class="n">ood_scores</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Initialize the StateAnalyzer with state centers, features, and OOD scores.</span>
+
+<span class="sd">        Parameters:</span>
+<span class="sd">        - state_centers: List or array of state centers.</span>
+<span class="sd">        - features: List of trajectories, where each trajectory is a list of feature vectors.</span>
+<span class="sd">        - ood_scores: List of OOD scores corresponding to the features.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">state_centers</span> <span class="o">=</span> <span class="n">state_centers</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">features</span> <span class="o">=</span> <span class="n">features</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">ood_scores</span> <span class="o">=</span> <span class="n">ood_scores</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">flatten_features</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">concatenate</span><span class="p">(</span><span class="n">features</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">flatten_ood_scores</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">concatenate</span><span class="p">(</span><span class="n">ood_scores</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">indices</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_flatten_features</span><span class="p">()</span>
+
+    <span class="k">def</span> <span class="nf">_flatten_features</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Keep track of (traj_idx, frame_idx, flatten_idx).</span>
+<span class="sd">        In case that different trajectories have different lengths, have careful record of the indices.</span>
+
+<span class="sd">        Returns:</span>
+<span class="sd">        - flatten_features: Flattened list of feature vectors.</span>
+<span class="sd">        - indices: List of tuples containing (traj_idx, frame_idx, flatten_idx).</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">indices</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="n">flatten_idx</span> <span class="o">=</span> <span class="mi">0</span>
+        <span class="k">for</span> <span class="n">traj_idx</span><span class="p">,</span> <span class="n">traj</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">features</span><span class="p">):</span>
+            <span class="k">for</span> <span class="n">frame_idx</span><span class="p">,</span> <span class="n">f</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">traj</span><span class="p">):</span>
+                <span class="n">indices</span><span class="o">.</span><span class="n">append</span><span class="p">((</span><span class="n">traj_idx</span><span class="p">,</span> <span class="n">frame_idx</span><span class="p">,</span> <span class="n">flatten_idx</span><span class="p">))</span>
+                <span class="n">flatten_idx</span> <span class="o">+=</span> <span class="mi">1</span>
+        <span class="k">return</span> <span class="n">indices</span>
+
+    <span class="k">def</span> <span class="nf">find_center_frames</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">center_idx</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span> <span class="n">top_n</span><span class="o">=</span><span class="mi">10</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Find the indices of the closest frames to each state center.</span>
+
+<span class="sd">        Parameters:</span>
+<span class="sd">        - num_centers: Number of state centers (default: 4).</span>
+<span class="sd">        - top_n: Number of closest frames to return for each center (default: 10).</span>
+
+<span class="sd">        Returns:</span>
+<span class="sd">        - center_frames: DataFrame containing the closest frames for each state center.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">results</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="n">diff</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">linalg</span><span class="o">.</span><span class="n">norm</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">flatten_features</span> <span class="o">-</span> <span class="bp">self</span><span class="o">.</span><span class="n">state_centers</span><span class="p">[</span><span class="n">center_idx</span><span class="p">],</span> <span class="n">axis</span><span class="o">=</span><span class="mi">1</span><span class="p">)</span>
+
+        <span class="c1"># Find the indices of the top_n closest frames</span>
+        <span class="n">k</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">argsort</span><span class="p">(</span><span class="n">diff</span><span class="p">)[:</span><span class="n">top_n</span><span class="p">]</span>
+
+        <span class="c1"># Extract trajectory, frame, and flattened indices</span>
+        <span class="n">closest_entries</span> <span class="o">=</span> <span class="p">[(</span><span class="n">center_idx</span><span class="p">,</span> <span class="o">*</span><span class="bp">self</span><span class="o">.</span><span class="n">indices</span><span class="p">[</span><span class="n">i</span><span class="p">])</span> <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="n">k</span><span class="p">]</span>
+        <span class="n">results</span><span class="o">.</span><span class="n">extend</span><span class="p">(</span><span class="n">closest_entries</span><span class="p">)</span>
+
+        <span class="c1"># Create a DataFrame to store the results</span>
+        <span class="n">center_frames</span> <span class="o">=</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">(</span><span class="n">results</span><span class="p">,</span> <span class="n">columns</span><span class="o">=</span><span class="p">[</span><span class="s2">&quot;Center_Index&quot;</span><span class="p">,</span> <span class="s2">&quot;Trajectory&quot;</span><span class="p">,</span> <span class="s2">&quot;Frame&quot;</span><span class="p">,</span> <span class="s2">&quot;Flatten_Index&quot;</span><span class="p">])</span>
+        <span class="k">return</span> <span class="n">center_frames</span>
+
+    <span class="k">def</span> <span class="nf">find_transition_states</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">state_idx_1</span><span class="p">,</span> <span class="n">state_idx_2</span><span class="p">,</span> <span class="n">threshold</span><span class="o">=</span><span class="mf">0.25</span><span class="p">,</span> <span class="n">top_n</span><span class="o">=</span><span class="mi">10</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Find the indices of the transition states with the highest OOD scores between two states.</span>
+
+<span class="sd">        Parameters:</span>
+<span class="sd">        - state_idx_1: Index of the first state.</span>
+<span class="sd">        - state_idx_2: Index of the second state.</span>
+<span class="sd">        - threshold: Distance threshold for considering a feature as close to the midpoint (default: 0.25).</span>
+<span class="sd">          Note: the threshold can&#39;t be larger than sqrt(2), not recommended to be larger than 1</span>
+<span class="sd">        - top_n: Number of top transition states to return (default: 10).</span>
+
+<span class="sd">        Returns:</span>
+<span class="sd">        - selected_indices: Indices of the top transition states.</span>
+<span class="sd">        - selected_ood_scores: OOD scores of the top transition states.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="c1"># Compute the midpoint between the two state centers and normalize it</span>
+        <span class="n">state_centers_mid</span> <span class="o">=</span> <span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">state_centers</span><span class="p">[</span><span class="n">state_idx_1</span><span class="p">]</span> <span class="o">+</span> <span class="bp">self</span><span class="o">.</span><span class="n">state_centers</span><span class="p">[</span><span class="n">state_idx_2</span><span class="p">])</span> <span class="o">/</span> <span class="mi">2</span>
+        <span class="n">state_centers_mid</span> <span class="o">/=</span> <span class="n">np</span><span class="o">.</span><span class="n">linalg</span><span class="o">.</span><span class="n">norm</span><span class="p">(</span><span class="n">state_centers_mid</span><span class="p">)</span>  <span class="c1"># Normalize</span>
+
+        <span class="c1"># Find indices where the feature is within the threshold distance from state_centers_mid</span>
+        <span class="n">close_indices</span> <span class="o">=</span> <span class="p">[</span><span class="n">i</span> <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">flatten_features</span><span class="p">))</span>
+                         <span class="k">if</span> <span class="n">np</span><span class="o">.</span><span class="n">linalg</span><span class="o">.</span><span class="n">norm</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">flatten_features</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">-</span> <span class="n">state_centers_mid</span><span class="p">)</span> <span class="o">&lt;</span> <span class="n">threshold</span><span class="p">]</span>
+
+        <span class="c1"># Check if there are enough close frames</span>
+        <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">close_indices</span><span class="p">)</span> <span class="o">&lt;</span> <span class="n">top_n</span><span class="p">:</span>
+            <span class="n">warnings</span><span class="o">.</span><span class="n">warn</span><span class="p">(</span>
+                <span class="sa">f</span><span class="s2">&quot;Only </span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">close_indices</span><span class="p">)</span><span class="si">}</span><span class="s2"> close frames found (requested </span><span class="si">{</span><span class="n">top_n</span><span class="si">}</span><span class="s2">). &quot;</span>
+                <span class="s2">&quot;Returning all available frames. Try increasing the threshold.&quot;</span><span class="p">,</span>
+                <span class="ne">UserWarning</span><span class="p">,</span>
+            <span class="p">)</span>
+            <span class="n">top_n</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">close_indices</span><span class="p">)</span>  <span class="c1"># Adjust top_n to the number of available frames</span>
+
+        <span class="c1"># Get the OOD scores corresponding to these indices</span>
+        <span class="n">ood_scores_filtered</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">flatten_ood_scores</span><span class="p">[</span><span class="n">close_indices</span><span class="p">]</span>
+
+        <span class="c1"># Get the indices of the top N highest OOD scores from the selected frames</span>
+        <span class="n">top_n_indices</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">argsort</span><span class="p">(</span><span class="n">ood_scores_filtered</span><span class="p">)[</span><span class="o">-</span><span class="n">top_n</span><span class="p">:]</span>
+
+        <span class="c1"># Retrieve the corresponding original indices</span>
+        <span class="n">selected_indices</span> <span class="o">=</span> <span class="p">[</span><span class="n">close_indices</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="n">top_n_indices</span><span class="p">]</span>
+
+        <span class="c1"># Get the corresponding OOD scores</span>
+        <span class="n">selected_ood_scores</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">flatten_ood_scores</span><span class="p">[</span><span class="n">selected_indices</span><span class="p">]</span>
+
+        <span class="c1"># Create a DataFrame to store the results</span>
+        <span class="n">transition_data</span> <span class="o">=</span> <span class="p">{</span>
+            <span class="s2">&quot;State_1_Index&quot;</span><span class="p">:</span> <span class="n">state_idx_1</span><span class="p">,</span>
+            <span class="s2">&quot;State_2_Index&quot;</span><span class="p">:</span> <span class="n">state_idx_2</span><span class="p">,</span>
+            <span class="s2">&quot;OOD_Score&quot;</span><span class="p">:</span> <span class="n">selected_ood_scores</span><span class="p">,</span>
+            <span class="s2">&quot;Flatten_Index&quot;</span><span class="p">:</span> <span class="n">selected_indices</span><span class="p">,</span>
+            <span class="p">}</span>
+
+        <span class="c1"># Add trajectory and frame indices if available</span>
+        <span class="k">if</span> <span class="nb">hasattr</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="s1">&#39;indices&#39;</span><span class="p">):</span>
+            <span class="n">transition_data</span><span class="p">[</span><span class="s2">&quot;Trajectory&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">indices</span><span class="p">[</span><span class="n">i</span><span class="p">][</span><span class="mi">0</span><span class="p">]</span> <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="n">selected_indices</span><span class="p">]</span>
+            <span class="n">transition_data</span><span class="p">[</span><span class="s2">&quot;Frame&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">indices</span><span class="p">[</span><span class="n">i</span><span class="p">][</span><span class="mi">1</span><span class="p">]</span> <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="n">selected_indices</span><span class="p">]</span>
+
+        <span class="n">transition_df</span> <span class="o">=</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">(</span><span class="n">transition_data</span><span class="p">)</span>
+
+        <span class="k">return</span> <span class="n">transition_df</span>
+</pre></div>
+</div>
+</div>
+<div class="nbinput docutils container">
+<div class="prompt highlight-none notranslate"><div class="highlight"><pre><span></span>[8]:
+</pre></div>
+</div>
+<div class="input_area highlight-ipython3 notranslate"><div class="highlight"><pre><span></span><span class="c1"># Initialize the StateAnalyzer</span>
+<span class="n">analyzer</span> <span class="o">=</span> <span class="n">StateAnalyzer</span><span class="p">(</span><span class="n">state_centers</span><span class="p">,</span> <span class="n">features</span><span class="p">,</span> <span class="n">ood_scores</span><span class="p">)</span>
+
+<span class="c1"># Find the closest frames to each state center</span>
+<span class="n">center_idx</span> <span class="o">=</span> <span class="mi">2</span>
+<span class="n">center_frames</span> <span class="o">=</span> <span class="n">analyzer</span><span class="o">.</span><span class="n">find_center_frames</span><span class="p">(</span><span class="n">center_idx</span><span class="o">=</span><span class="n">center_idx</span><span class="p">)</span>
+<span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Closest frames to state center </span><span class="si">{</span><span class="n">center_idx</span><span class="si">}</span><span class="s2">:&quot;</span><span class="p">)</span>
+<span class="nb">print</span><span class="p">(</span><span class="n">center_frames</span><span class="o">.</span><span class="n">to_string</span><span class="p">(</span><span class="n">index</span><span class="o">=</span><span class="kc">False</span><span class="p">))</span>
+</pre></div>
+</div>
+</div>
+<div class="nboutput nblast docutils container">
+<div class="prompt empty docutils container">
+</div>
+<div class="output_area docutils container">
+<div class="highlight"><pre>
+Closest frames to state center 2:
+ Center_Index  Trajectory  Frame  Flatten_Index
+            2          21   1215         211215
+            2         150   2809        1502809
+            2          21   2684         212684
+            2         150   3540        1503540
+            2         151   7972        1517972
+            2          21   3911         213911
+            2         128   7181        1287181
+            2          45   9219         459219
+            2           0   4326           4326
+            2         150   9405        1509405
+</pre></div></div>
+</div>
+</section>
+<section id="Find-the-Transition-State-Conformations-Between-State-1-and-State-2:">
+<h2>Find the Transition State Conformations Between State 1 and State 2:<a class="headerlink" href="#Find-the-Transition-State-Conformations-Between-State-1-and-State-2:" title="Link to this heading">¶</a></h2>
+<div class="nbinput docutils container">
+<div class="prompt highlight-none notranslate"><div class="highlight"><pre><span></span>[9]:
+</pre></div>
+</div>
+<div class="input_area highlight-ipython3 notranslate"><div class="highlight"><pre><span></span><span class="n">state_idx_1</span> <span class="o">=</span> <span class="mi">0</span>
+<span class="n">state_idx_2</span> <span class="o">=</span> <span class="mi">1</span>
+<span class="n">transition_states</span> <span class="o">=</span> <span class="n">analyzer</span><span class="o">.</span><span class="n">find_transition_states</span><span class="p">(</span><span class="n">state_idx_1</span><span class="p">,</span> <span class="n">state_idx_2</span><span class="p">,</span> <span class="n">threshold</span><span class="o">=</span><span class="mf">0.5</span><span class="p">)</span>
+<span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Transition state between state </span><span class="si">{</span><span class="n">state_idx_1</span><span class="si">}</span><span class="s2"> and state </span><span class="si">{</span><span class="n">state_idx_2</span><span class="si">}</span><span class="s2">:&quot;</span><span class="p">)</span>
+<span class="nb">print</span><span class="p">(</span><span class="n">transition_states</span><span class="o">.</span><span class="n">to_string</span><span class="p">(</span><span class="n">index</span><span class="o">=</span><span class="kc">False</span><span class="p">))</span>
+</pre></div>
+</div>
+</div>
+<div class="nboutput nblast docutils container">
+<div class="prompt empty docutils container">
+</div>
+<div class="output_area docutils container">
+<div class="highlight"><pre>
+Transition state between state 0 and state 1:
+ State_1_Index  State_2_Index  OOD_Score  Flatten_Index  Trajectory  Frame
+             0              1   0.424043        1127138         112   7138
+             0              1   0.424043        1127162         112   7162
+             0              1   0.424273         196158          19   6158
+             0              1   0.424390         455435          45   5435
+             0              1   0.424422         455541          45   5541
+             0              1   0.424532         196217          19   6217
+             0              1   0.424601         604530          60   4530
+             0              1   0.424729         195996          19   5996
+             0              1   0.425174         196649          19   6649
+             0              1   0.425725        1126842         112   6842
+</pre></div></div>
+</div>
+</section>
+<section id="Find-the-Transition-State-Conformations-Between-State-2-and-State-3:">
+<h2>Find the Transition State Conformations Between State 2 and State 3:<a class="headerlink" href="#Find-the-Transition-State-Conformations-Between-State-2-and-State-3:" title="Link to this heading">¶</a></h2>
+<div class="nbinput docutils container">
+<div class="prompt highlight-none notranslate"><div class="highlight"><pre><span></span>[10]:
+</pre></div>
+</div>
+<div class="input_area highlight-ipython3 notranslate"><div class="highlight"><pre><span></span><span class="n">state_idx_1</span> <span class="o">=</span> <span class="mi">1</span>
+<span class="n">state_idx_2</span> <span class="o">=</span> <span class="mi">2</span>
+<span class="n">transition_states</span> <span class="o">=</span> <span class="n">analyzer</span><span class="o">.</span><span class="n">find_transition_states</span><span class="p">(</span><span class="n">state_idx_1</span><span class="p">,</span> <span class="n">state_idx_2</span><span class="p">)</span>
+<span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Transition state between state </span><span class="si">{</span><span class="n">state_idx_1</span><span class="si">}</span><span class="s2"> and state </span><span class="si">{</span><span class="n">state_idx_2</span><span class="si">}</span><span class="s2">:&quot;</span><span class="p">)</span>
+<span class="nb">print</span><span class="p">(</span><span class="n">transition_states</span><span class="o">.</span><span class="n">to_string</span><span class="p">(</span><span class="n">index</span><span class="o">=</span><span class="kc">False</span><span class="p">))</span>
+</pre></div>
+</div>
+</div>
+<div class="nboutput nblast docutils container">
+<div class="prompt empty docutils container">
+</div>
+<div class="output_area docutils container">
+<div class="highlight"><pre>
+Transition state between state 1 and state 2:
+ State_1_Index  State_2_Index  OOD_Score  Flatten_Index  Trajectory  Frame
+             1              2   0.446738         180716          18    716
+             1              2   0.446771        1501421         150   1421
+             1              2   0.446950         460201          46    201
+             1              2   0.447108        1123185         112   3185
+             1              2   0.447181         224263          22   4263
+             1              2   0.447375         224250          22   4250
+             1              2   0.447526         103890          10   3890
+             1              2   0.447535        1287784         128   7784
+             1              2   0.448049         289471          28   9471
+             1              2   0.448070         103844          10   3844
+</pre></div></div>
+</div>
+</section>
+<section id="Find-the-Transition-State-Conformations-Between-State-2-and-State-4:">
+<h2>Find the Transition State Conformations Between State 2 and State 4:<a class="headerlink" href="#Find-the-Transition-State-Conformations-Between-State-2-and-State-4:" title="Link to this heading">¶</a></h2>
+<div class="nbinput docutils container">
+<div class="prompt highlight-none notranslate"><div class="highlight"><pre><span></span>[11]:
+</pre></div>
+</div>
+<div class="input_area highlight-ipython3 notranslate"><div class="highlight"><pre><span></span><span class="n">state_idx_1</span> <span class="o">=</span> <span class="mi">1</span>
+<span class="n">state_idx_2</span> <span class="o">=</span> <span class="mi">3</span>
+<span class="n">transition_states</span> <span class="o">=</span> <span class="n">analyzer</span><span class="o">.</span><span class="n">find_transition_states</span><span class="p">(</span><span class="n">state_idx_1</span><span class="p">,</span> <span class="n">state_idx_2</span><span class="p">,</span> <span class="n">threshold</span><span class="o">=</span><span class="mf">0.5</span><span class="p">)</span>
+<span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Transition state between state </span><span class="si">{</span><span class="n">state_idx_1</span><span class="si">}</span><span class="s2"> and state </span><span class="si">{</span><span class="n">state_idx_2</span><span class="si">}</span><span class="s2">:&quot;</span><span class="p">)</span>
+<span class="nb">print</span><span class="p">(</span><span class="n">transition_states</span><span class="o">.</span><span class="n">to_string</span><span class="p">(</span><span class="n">index</span><span class="o">=</span><span class="kc">False</span><span class="p">))</span>
+</pre></div>
+</div>
+</div>
+<div class="nboutput nblast docutils container">
+<div class="prompt empty docutils container">
+</div>
+<div class="output_area docutils container">
+<div class="highlight"><pre>
+Transition state between state 1 and state 3:
+ State_1_Index  State_2_Index  OOD_Score  Flatten_Index  Trajectory  Frame
+             1              3   0.471023        1484781         148   4781
+             1              3   0.471358        1484847         148   4847
+             1              3   0.472856          41614           4   1614
+             1              3   0.472881        1484808         148   4808
+             1              3   0.478483          41701           4   1701
+             1              3   0.479567          41628           4   1628
+             1              3   0.482969          41615           4   1615
+             1              3   0.483645          41700           4   1700
+             1              3   0.485224          41702           4   1702
+             1              3   0.489177          41626           4   1626
+</pre></div></div>
+</div>
+</section>
+<section id="Compute-the-Angles-Between-State-Center-Vectors:">
+<h2>Compute the Angles Between State Center Vectors:<a class="headerlink" href="#Compute-the-Angles-Between-State-Center-Vectors:" title="Link to this heading">¶</a></h2>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">angle_between_vectors</span></code> computes and prints the pairwise angles (in radians) between the state center vectors in a high dimensional embedding space to assess how uniformly dispersed the learned states are.</p></li>
+</ul>
+<div class="nbinput docutils container">
+<div class="prompt highlight-none notranslate"><div class="highlight"><pre><span></span>[12]:
+</pre></div>
+</div>
+<div class="input_area highlight-ipython3 notranslate"><div class="highlight"><pre><span></span><span class="k">def</span> <span class="nf">angle_between_vectors</span><span class="p">(</span><span class="n">v1</span><span class="p">,</span> <span class="n">v2</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Calculate the angle between two vectors in radians.</span>
+
+<span class="sd">    Parameters:</span>
+<span class="sd">        v1 (array-like): First vector.</span>
+<span class="sd">        v2 (array-like): Second vector.</span>
+
+<span class="sd">    Returns:</span>
+<span class="sd">        float: Angle in radians.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="c1"># Convert inputs to numpy arrays</span>
+    <span class="n">v1</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">(</span><span class="n">v1</span><span class="p">)</span>
+    <span class="n">v2</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">(</span><span class="n">v2</span><span class="p">)</span>
+
+    <span class="c1"># Calculate dot product and magnitudes</span>
+    <span class="n">dot_product</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">dot</span><span class="p">(</span><span class="n">v1</span><span class="p">,</span> <span class="n">v2</span><span class="p">)</span>
+    <span class="n">magnitude_v1</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">linalg</span><span class="o">.</span><span class="n">norm</span><span class="p">(</span><span class="n">v1</span><span class="p">)</span>
+    <span class="n">magnitude_v2</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">linalg</span><span class="o">.</span><span class="n">norm</span><span class="p">(</span><span class="n">v2</span><span class="p">)</span>
+
+    <span class="c1"># Calculate cosine of the angle</span>
+    <span class="n">cos_theta</span> <span class="o">=</span> <span class="n">dot_product</span> <span class="o">/</span> <span class="p">(</span><span class="n">magnitude_v1</span> <span class="o">*</span> <span class="n">magnitude_v2</span><span class="p">)</span>
+
+    <span class="c1"># Handle potential numerical precision issues</span>
+    <span class="n">cos_theta</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">clip</span><span class="p">(</span><span class="n">cos_theta</span><span class="p">,</span> <span class="o">-</span><span class="mf">1.0</span><span class="p">,</span> <span class="mf">1.0</span><span class="p">)</span>
+
+    <span class="c1"># Calculate angle in radians</span>
+    <span class="n">angle_radians</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">arccos</span><span class="p">(</span><span class="n">cos_theta</span><span class="p">)</span>
+    <span class="k">return</span> <span class="n">angle_radians</span>
+
+<span class="c1"># Well-dispersed data should have the angles between center vectors to be almost identical</span>
+<span class="c1"># Useful when the dimension is larger than 3 or the number of state is larger than 4</span>
+<span class="n">n_states</span> <span class="o">=</span> <span class="mi">4</span>
+<span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">n_states</span><span class="p">):</span>
+    <span class="k">for</span> <span class="n">j</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">i</span><span class="p">):</span>
+        <span class="nb">print</span><span class="p">(</span><span class="n">angle_between_vectors</span><span class="p">(</span><span class="n">state_centers</span><span class="p">[</span><span class="n">i</span><span class="p">],</span> <span class="n">state_centers</span><span class="p">[</span><span class="n">j</span><span class="p">]))</span>
+</pre></div>
+</div>
+</div>
+<div class="nboutput nblast docutils container">
+<div class="prompt empty docutils container">
+</div>
+<div class="output_area docutils container">
+<div class="highlight"><pre>
+1.8708554530644315
+1.9233548700192482
+1.9310537054099948
+1.9236102600048615
+1.9150272270878264
+1.8999867164522164
+</pre></div></div>
+</div>
+<div class="nbinput docutils container">
+<div class="prompt highlight-none notranslate"><div class="highlight"><pre><span></span>[13]:
+</pre></div>
+</div>
+<div class="input_area highlight-ipython3 notranslate"><div class="highlight"><pre><span></span><span class="n">xx</span> <span class="o">=</span> <span class="p">[</span><span class="n">frame</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="k">for</span> <span class="n">traj</span> <span class="ow">in</span> <span class="n">features</span> <span class="k">for</span> <span class="n">frame</span> <span class="ow">in</span> <span class="n">traj</span><span class="p">]</span>
+<span class="n">yy</span> <span class="o">=</span> <span class="p">[</span><span class="n">frame</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span> <span class="k">for</span> <span class="n">traj</span> <span class="ow">in</span> <span class="n">features</span> <span class="k">for</span> <span class="n">frame</span> <span class="ow">in</span> <span class="n">traj</span><span class="p">]</span>
+<span class="n">zz</span> <span class="o">=</span> <span class="p">[</span><span class="n">frame</span><span class="p">[</span><span class="mi">2</span><span class="p">]</span> <span class="k">for</span> <span class="n">traj</span> <span class="ow">in</span> <span class="n">features</span> <span class="k">for</span> <span class="n">frame</span> <span class="ow">in</span> <span class="n">traj</span><span class="p">]</span>
+<span class="n">scores</span> <span class="o">=</span> <span class="p">[</span><span class="n">score</span> <span class="k">for</span> <span class="n">traj</span> <span class="ow">in</span> <span class="n">ood_scores</span> <span class="k">for</span> <span class="n">score</span> <span class="ow">in</span> <span class="n">traj</span><span class="p">]</span>
+
+<span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Length of xx:&quot;</span><span class="p">,</span> <span class="nb">len</span><span class="p">(</span><span class="n">xx</span><span class="p">))</span>
+<span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Length of yy:&quot;</span><span class="p">,</span> <span class="nb">len</span><span class="p">(</span><span class="n">yy</span><span class="p">))</span>
+<span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Length of ood_scores:&quot;</span><span class="p">,</span> <span class="nb">len</span><span class="p">(</span><span class="n">scores</span><span class="p">))</span>
+</pre></div>
+</div>
+</div>
+<div class="nboutput nblast docutils container">
+<div class="prompt empty docutils container">
+</div>
+<div class="output_area docutils container">
+<div class="highlight"><pre>
+Length of xx: 1526041
+Length of yy: 1526041
+Length of ood_scores: 1526041
+</pre></div></div>
+</div>
+</section>
+<section id="Visualize-the-Results-in-the-Hyperspherical-Latent-Space:">
+<h2>Visualize the Results in the Hyperspherical Latent Space:<a class="headerlink" href="#Visualize-the-Results-in-the-Hyperspherical-Latent-Space:" title="Link to this heading">¶</a></h2>
+<div class="nbinput docutils container">
+<div class="prompt highlight-none notranslate"><div class="highlight"><pre><span></span>[14]:
+</pre></div>
+</div>
+<div class="input_area highlight-ipython3 notranslate"><div class="highlight"><pre><span></span><span class="n">r</span> <span class="o">=</span> <span class="mi">1</span>
+<span class="n">pi</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">pi</span>
+<span class="n">cos</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">cos</span>
+<span class="n">sin</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">sin</span>
+<span class="n">phi</span><span class="p">,</span> <span class="n">theta</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">mgrid</span><span class="p">[</span><span class="mf">0.0</span><span class="p">:</span><span class="n">pi</span><span class="p">:</span><span class="mi">100</span><span class="n">j</span><span class="p">,</span> <span class="mf">0.0</span><span class="p">:</span><span class="mf">2.0</span><span class="o">*</span><span class="n">pi</span><span class="p">:</span><span class="mi">100</span><span class="n">j</span><span class="p">]</span>
+
+<span class="n">x</span> <span class="o">=</span> <span class="n">r</span><span class="o">*</span><span class="n">sin</span><span class="p">(</span><span class="n">phi</span><span class="p">)</span><span class="o">*</span><span class="n">cos</span><span class="p">(</span><span class="n">theta</span><span class="p">)</span>
+<span class="n">y</span> <span class="o">=</span> <span class="n">r</span><span class="o">*</span><span class="n">sin</span><span class="p">(</span><span class="n">phi</span><span class="p">)</span><span class="o">*</span><span class="n">sin</span><span class="p">(</span><span class="n">theta</span><span class="p">)</span>
+<span class="n">z</span> <span class="o">=</span> <span class="n">r</span><span class="o">*</span><span class="n">cos</span><span class="p">(</span><span class="n">phi</span><span class="p">)</span>
+
+<span class="n">plt</span><span class="o">.</span><span class="n">rcParams</span><span class="p">[</span><span class="s1">&#39;figure.figsize&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="p">(</span><span class="mi">5</span><span class="p">,</span><span class="mi">4</span><span class="p">)</span>
+<span class="n">fig</span> <span class="o">=</span> <span class="n">plt</span><span class="o">.</span><span class="n">figure</span><span class="p">()</span>
+<span class="n">ax</span> <span class="o">=</span> <span class="n">fig</span><span class="o">.</span><span class="n">add_subplot</span><span class="p">(</span><span class="mi">111</span><span class="p">,</span> <span class="n">projection</span><span class="o">=</span><span class="s1">&#39;3d&#39;</span><span class="p">)</span>
+
+<span class="n">ax</span><span class="o">.</span><span class="n">plot_surface</span><span class="p">(</span>
+   <span class="n">x</span><span class="p">,</span> <span class="n">y</span><span class="p">,</span> <span class="n">z</span><span class="p">,</span>  <span class="n">rstride</span><span class="o">=</span><span class="mi">2</span><span class="p">,</span> <span class="n">cstride</span><span class="o">=</span><span class="mi">2</span><span class="p">,</span> <span class="n">color</span><span class="o">=</span><span class="s1">&#39;c&#39;</span><span class="p">,</span> <span class="n">alpha</span><span class="o">=</span><span class="mf">0.1</span><span class="p">,</span> <span class="n">linewidth</span><span class="o">=</span><span class="mi">100</span><span class="p">,</span><span class="n">antialiased</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
+
+<span class="n">ax</span><span class="o">.</span><span class="n">plot</span><span class="p">([</span><span class="mi">0</span><span class="p">,</span><span class="n">state_centers</span><span class="p">[</span><span class="mi">0</span><span class="p">,</span><span class="mi">0</span><span class="p">]],[</span><span class="mi">0</span><span class="p">,</span><span class="n">state_centers</span><span class="p">[</span><span class="mi">0</span><span class="p">,</span><span class="mi">1</span><span class="p">]],[</span><span class="mi">0</span><span class="p">,</span><span class="n">state_centers</span><span class="p">[</span><span class="mi">0</span><span class="p">,</span><span class="mi">2</span><span class="p">]],</span><span class="n">linewidth</span><span class="o">=</span><span class="mi">2</span><span class="p">,</span><span class="n">color</span><span class="o">=</span><span class="s1">&#39;black&#39;</span><span class="p">,</span><span class="n">linestyle</span><span class="o">=</span><span class="s1">&#39;--&#39;</span><span class="p">)</span>
+<span class="n">ax</span><span class="o">.</span><span class="n">plot</span><span class="p">([</span><span class="mi">0</span><span class="p">,</span><span class="n">state_centers</span><span class="p">[</span><span class="mi">1</span><span class="p">,</span><span class="mi">0</span><span class="p">]],[</span><span class="mi">0</span><span class="p">,</span><span class="n">state_centers</span><span class="p">[</span><span class="mi">1</span><span class="p">,</span><span class="mi">1</span><span class="p">]],[</span><span class="mi">0</span><span class="p">,</span><span class="n">state_centers</span><span class="p">[</span><span class="mi">1</span><span class="p">,</span><span class="mi">2</span><span class="p">]],</span><span class="n">linewidth</span><span class="o">=</span><span class="mi">2</span><span class="p">,</span><span class="n">color</span><span class="o">=</span><span class="s1">&#39;black&#39;</span><span class="p">,</span><span class="n">linestyle</span><span class="o">=</span><span class="s1">&#39;--&#39;</span><span class="p">)</span>
+<span class="n">ax</span><span class="o">.</span><span class="n">plot</span><span class="p">([</span><span class="mi">0</span><span class="p">,</span><span class="n">state_centers</span><span class="p">[</span><span class="mi">2</span><span class="p">,</span><span class="mi">0</span><span class="p">]],[</span><span class="mi">0</span><span class="p">,</span><span class="n">state_centers</span><span class="p">[</span><span class="mi">2</span><span class="p">,</span><span class="mi">1</span><span class="p">]],[</span><span class="mi">0</span><span class="p">,</span><span class="n">state_centers</span><span class="p">[</span><span class="mi">2</span><span class="p">,</span><span class="mi">2</span><span class="p">]],</span><span class="n">linewidth</span><span class="o">=</span><span class="mi">2</span><span class="p">,</span><span class="n">color</span><span class="o">=</span><span class="s1">&#39;black&#39;</span><span class="p">,</span><span class="n">linestyle</span><span class="o">=</span><span class="s1">&#39;--&#39;</span><span class="p">)</span>
+<span class="n">ax</span><span class="o">.</span><span class="n">plot</span><span class="p">([</span><span class="mi">0</span><span class="p">,</span><span class="n">state_centers</span><span class="p">[</span><span class="mi">3</span><span class="p">,</span><span class="mi">0</span><span class="p">]],[</span><span class="mi">0</span><span class="p">,</span><span class="n">state_centers</span><span class="p">[</span><span class="mi">3</span><span class="p">,</span><span class="mi">1</span><span class="p">]],[</span><span class="mi">0</span><span class="p">,</span><span class="n">state_centers</span><span class="p">[</span><span class="mi">3</span><span class="p">,</span><span class="mi">2</span><span class="p">]],</span><span class="n">linewidth</span><span class="o">=</span><span class="mi">2</span><span class="p">,</span><span class="n">color</span><span class="o">=</span><span class="s1">&#39;black&#39;</span><span class="p">,</span><span class="n">linestyle</span><span class="o">=</span><span class="s1">&#39;--&#39;</span><span class="p">)</span>
+
+<span class="n">c</span> <span class="o">=</span> <span class="n">ax</span><span class="o">.</span><span class="n">scatter</span><span class="p">(</span><span class="n">xx</span><span class="p">,</span><span class="n">yy</span><span class="p">,</span><span class="n">zz</span><span class="p">,</span><span class="n">c</span><span class="o">=</span><span class="n">scores</span><span class="p">,</span><span class="n">s</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span><span class="n">alpha</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span><span class="n">cmap</span><span class="o">=</span><span class="s1">&#39;coolwarm&#39;</span><span class="p">)</span>
+
+<span class="n">cb</span> <span class="o">=</span> <span class="n">fig</span><span class="o">.</span><span class="n">colorbar</span><span class="p">(</span><span class="n">c</span><span class="p">)</span>
+<span class="n">cb</span><span class="o">.</span><span class="n">ax</span><span class="o">.</span><span class="n">tick_params</span><span class="p">(</span><span class="n">labelsize</span><span class="o">=</span><span class="mi">10</span><span class="p">,</span><span class="n">length</span><span class="o">=</span><span class="mi">3</span><span class="p">,</span><span class="n">width</span><span class="o">=</span><span class="mf">1.5</span><span class="p">)</span>
+<span class="n">cb</span><span class="o">.</span><span class="n">set_label</span><span class="p">(</span><span class="s1">&#39;OOD score&#39;</span><span class="p">,</span><span class="n">fontsize</span><span class="o">=</span><span class="mi">18</span><span class="p">)</span>
+
+<span class="n">ax</span><span class="o">.</span><span class="n">set_xlim</span><span class="p">([</span><span class="o">-</span><span class="mi">1</span><span class="p">,</span><span class="mi">1</span><span class="p">])</span>
+<span class="n">ax</span><span class="o">.</span><span class="n">set_ylim</span><span class="p">([</span><span class="o">-</span><span class="mi">1</span><span class="p">,</span><span class="mi">1</span><span class="p">])</span>
+<span class="n">ax</span><span class="o">.</span><span class="n">set_zlim</span><span class="p">([</span><span class="o">-</span><span class="mi">1</span><span class="p">,</span><span class="mi">1</span><span class="p">])</span>
+<span class="n">ax</span><span class="o">.</span><span class="n">set_xticks</span><span class="p">([</span><span class="o">-</span><span class="mi">1</span><span class="p">,</span><span class="o">-</span><span class="mf">0.5</span><span class="p">,</span><span class="mi">0</span><span class="p">,</span><span class="mf">0.5</span><span class="p">,</span><span class="mi">1</span><span class="p">])</span>
+<span class="n">ax</span><span class="o">.</span><span class="n">set_yticks</span><span class="p">([</span><span class="o">-</span><span class="mi">1</span><span class="p">,</span><span class="o">-</span><span class="mf">0.5</span><span class="p">,</span><span class="mi">0</span><span class="p">,</span><span class="mf">0.5</span><span class="p">,</span><span class="mi">1</span><span class="p">])</span>
+<span class="n">ax</span><span class="o">.</span><span class="n">set_zticks</span><span class="p">([</span><span class="o">-</span><span class="mi">1</span><span class="p">,</span><span class="o">-</span><span class="mf">0.5</span><span class="p">,</span><span class="mi">0</span><span class="p">,</span><span class="mf">0.5</span><span class="p">,</span><span class="mi">1</span><span class="p">],[</span><span class="o">-</span><span class="mi">1</span><span class="p">,</span><span class="o">-</span><span class="mf">0.5</span><span class="p">,</span><span class="mi">0</span><span class="p">,</span><span class="mf">0.5</span><span class="p">,</span><span class="mi">1</span><span class="p">])</span>
+<span class="n">ax</span><span class="o">.</span><span class="n">set_aspect</span><span class="p">(</span><span class="s2">&quot;equal&quot;</span><span class="p">)</span>
+<span class="n">ax</span><span class="o">.</span><span class="n">tick_params</span><span class="p">(</span><span class="n">axis</span><span class="o">=</span><span class="s2">&quot;both&quot;</span><span class="p">,</span><span class="n">labelsize</span><span class="o">=</span><span class="mi">10</span><span class="p">,</span><span class="n">direction</span><span class="o">=</span><span class="s1">&#39;out&#39;</span><span class="p">,</span><span class="n">length</span><span class="o">=</span><span class="mf">7.5</span><span class="p">,</span><span class="n">width</span><span class="o">=</span><span class="mf">2.5</span><span class="p">)</span>
+
+<span class="n">ax</span><span class="o">.</span><span class="n">set_xlabel</span><span class="p">(</span><span class="s1">&#39;z1&#39;</span><span class="p">,</span><span class="n">fontsize</span><span class="o">=</span><span class="mi">15</span><span class="p">)</span>
+<span class="n">ax</span><span class="o">.</span><span class="n">set_ylabel</span><span class="p">(</span><span class="s1">&#39;z2&#39;</span><span class="p">,</span><span class="n">fontsize</span><span class="o">=</span><span class="mi">15</span><span class="p">)</span>
+<span class="n">ax</span><span class="o">.</span><span class="n">set_zlabel</span><span class="p">(</span><span class="s1">&#39;z3&#39;</span><span class="p">,</span><span class="n">fontsize</span><span class="o">=</span><span class="mi">15</span><span class="p">)</span>
+
+<span class="n">ax</span><span class="o">.</span><span class="n">view_init</span><span class="p">(</span><span class="n">elev</span><span class="o">=</span><span class="mi">20</span><span class="p">,</span> <span class="n">azim</span><span class="o">=</span><span class="mi">70</span><span class="p">)</span> <span class="c1"># Adjust these two values to have better views</span>
+</pre></div>
+</div>
+</div>
+<div class="nboutput nblast docutils container">
+<div class="prompt empty docutils container">
+</div>
+<div class="output_area docutils container">
+<img alt="../../_images/examples_hp35_HP35_24_0.png" src="../../_images/examples_hp35_HP35_24_0.png" />
+</div>
+</div>
+<div class="nbinput docutils container">
+<div class="prompt highlight-none notranslate"><div class="highlight"><pre><span></span>[15]:
+</pre></div>
+</div>
+<div class="input_area highlight-ipython3 notranslate"><div class="highlight"><pre><span></span><span class="c1"># This performs bootstrap resampling of transition probability matrices (TPMs) for a Markov State Model (MSM)</span>
+<span class="c1"># using the msmbuilder package, to estimate uncertainty in the model across a range of lag times.</span>
+
+<span class="kn">from</span> <span class="nn">msmbuilder.msm</span> <span class="kn">import</span> <span class="n">MarkovStateModel</span>
+
+<span class="n">n_states</span> <span class="o">=</span> <span class="mi">4</span> <span class="c1"># Number of discrete states in the MSM</span>
+<span class="n">num_runs</span> <span class="o">=</span> <span class="mi">50</span> <span class="c1"># Number of bootstrap replicates</span>
+<span class="n">num_samples_per_run</span> <span class="o">=</span> <span class="mi">160</span> <span class="c1"># How many trajectories to sample per bootstrap</span>
+<span class="n">lt</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">arange</span><span class="p">(</span><span class="mi">100</span><span class="p">,</span> <span class="mi">1501</span><span class="p">,</span> <span class="mi">100</span><span class="p">)</span> <span class="c1"># Lag times to evaluate (e.g. 100, 200, ..., 1500)</span>
+
+<span class="c1"># TPM generation function</span>
+<span class="k">def</span> <span class="nf">generate_TPM</span><span class="p">(</span><span class="n">trajs</span><span class="p">,</span> <span class="n">lagtime</span><span class="p">,</span> <span class="n">n_states</span><span class="o">=</span><span class="mi">4</span><span class="p">,):</span>
+    <span class="n">TPM</span> <span class="o">=</span> <span class="p">[]</span>
+    <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">lagtime</span><span class="p">)):</span>
+        <span class="n">msm_macro</span> <span class="o">=</span> <span class="n">MarkovStateModel</span><span class="p">(</span><span class="n">n_timescales</span><span class="o">=</span><span class="mi">3</span><span class="p">,</span> <span class="n">lag_time</span><span class="o">=</span><span class="n">lagtime</span><span class="p">[</span><span class="n">i</span><span class="p">],</span>
+                                     <span class="n">ergodic_cutoff</span><span class="o">=</span><span class="s1">&#39;on&#39;</span><span class="p">,</span> <span class="n">reversible_type</span><span class="o">=</span><span class="s1">&#39;mle&#39;</span><span class="p">,</span> <span class="n">verbose</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
+        <span class="n">msm_macro</span><span class="o">.</span><span class="n">fit</span><span class="p">(</span><span class="n">trajs</span><span class="p">)</span>
+        <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">msm_macro</span><span class="o">.</span><span class="n">transmat_</span><span class="p">)</span> <span class="o">!=</span> <span class="n">n_states</span><span class="p">:</span>
+            <span class="k">return</span> <span class="kc">None</span>
+        <span class="n">TPM</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">msm_macro</span><span class="o">.</span><span class="n">transmat_</span><span class="p">)</span>
+    <span class="k">return</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">(</span><span class="n">TPM</span><span class="p">)</span>
+
+<span class="c1"># Bootstrap loop</span>
+<span class="n">bootstrap_TPM</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">((</span><span class="n">num_runs</span><span class="p">,</span> <span class="nb">len</span><span class="p">(</span><span class="n">lt</span><span class="p">),</span> <span class="n">n_states</span><span class="p">,</span> <span class="n">n_states</span><span class="p">))</span>
+<span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">num_runs</span><span class="p">):</span>
+    <span class="n">bootstrap_indices</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">random</span><span class="o">.</span><span class="n">choice</span><span class="p">(</span><span class="nb">range</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">lumped_trajs</span><span class="p">)),</span> <span class="n">size</span><span class="o">=</span><span class="n">num_samples_per_run</span><span class="p">,</span> <span class="n">replace</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+    <span class="n">bootstrap_trajs</span> <span class="o">=</span> <span class="p">[</span><span class="n">lumped_trajs</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="n">bootstrap_indices</span><span class="p">]</span>
+    <span class="n">temp_TPM</span> <span class="o">=</span> <span class="n">generate_TPM</span><span class="p">(</span><span class="n">bootstrap_trajs</span><span class="p">,</span> <span class="n">lagtime</span><span class="o">=</span><span class="n">lt</span><span class="p">)</span>
+    <span class="k">if</span> <span class="n">temp_TPM</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="k">continue</span>
+    <span class="n">bootstrap_TPM</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">=</span> <span class="n">temp_TPM</span>
+    <span class="nb">print</span><span class="p">(</span><span class="s1">&#39;Run </span><span class="si">{}</span><span class="s1"> is complete&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">i</span><span class="p">))</span>
+</pre></div>
+</div>
+</div>
+<div class="nboutput nblast docutils container">
+<div class="prompt empty docutils container">
+</div>
+<div class="output_area docutils container">
+<div class="highlight"><pre>
+Run 0 is complete
+Run 1 is complete
+Run 2 is complete
+Run 3 is complete
+Run 5 is complete
+Run 6 is complete
+Run 8 is complete
+Run 9 is complete
+Run 10 is complete
+Run 11 is complete
+Run 12 is complete
+Run 13 is complete
+Run 14 is complete
+Run 15 is complete
+Run 16 is complete
+Run 17 is complete
+Run 18 is complete
+Run 19 is complete
+Run 20 is complete
+Run 21 is complete
+Run 22 is complete
+Run 23 is complete
+Run 24 is complete
+Run 25 is complete
+Run 26 is complete
+Run 28 is complete
+Run 29 is complete
+Run 30 is complete
+Run 31 is complete
+Run 32 is complete
+Run 33 is complete
+Run 34 is complete
+Run 35 is complete
+Run 36 is complete
+Run 37 is complete
+Run 38 is complete
+Run 39 is complete
+Run 40 is complete
+Run 41 is complete
+Run 42 is complete
+Run 44 is complete
+Run 46 is complete
+Run 47 is complete
+Run 48 is complete
+Run 49 is complete
+</pre></div></div>
+</div>
+</section>
+<section id="Create-a-Markov-State-Model-(MSM):">
+<h2>Create a Markov State Model (MSM):<a class="headerlink" href="#Create-a-Markov-State-Model-(MSM):" title="Link to this heading">¶</a></h2>
+<ul class="simple">
+<li><p><strong>n_timescales</strong>: number of implied timescales to estimate</p></li>
+<li><p><strong>lag_time</strong>: lag between transitions used to build the model</p></li>
+<li><p><strong>ergodic_cutoff</strong>: ensures all states are connected (ergodic)</p></li>
+<li><p><strong>reversible_type</strong>: maximum likelihood estimator for reversibility</p></li>
+<li><p><strong>verbose</strong>: suppress output</p></li>
+</ul>
+<div class="nbinput nblast docutils container">
+<div class="prompt highlight-none notranslate"><div class="highlight"><pre><span></span>[16]:
+</pre></div>
+</div>
+<div class="input_area highlight-ipython3 notranslate"><div class="highlight"><pre><span></span><span class="c1"># Set the lag time for the MSM.</span>
+<span class="n">lagtime</span> <span class="o">=</span> <span class="mi">100</span> <span class="c1"># In simulation steps; corresponds to 20 ns</span>
+
+<span class="n">msm</span> <span class="o">=</span> <span class="n">MarkovStateModel</span><span class="p">(</span><span class="n">n_timescales</span><span class="o">=</span><span class="mi">6</span><span class="p">,</span> <span class="n">lag_time</span><span class="o">=</span><span class="n">lagtime</span><span class="p">,</span> <span class="n">ergodic_cutoff</span><span class="o">=</span><span class="s1">&#39;on&#39;</span><span class="p">,</span>
+                       <span class="n">reversible_type</span><span class="o">=</span><span class="s1">&#39;mle&#39;</span><span class="p">,</span> <span class="n">verbose</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
+
+<span class="c1"># Fit the MSM to the lumped trajectories (discrete state assignments per trajectory)</span>
+<span class="n">msm</span><span class="o">.</span><span class="n">fit</span><span class="p">(</span><span class="n">lumped_trajs</span><span class="p">)</span>
+
+<span class="c1"># Extract the transition probability matrix (TPM) from the fitted MSM</span>
+<span class="n">transmat</span> <span class="o">=</span> <span class="n">msm</span><span class="o">.</span><span class="n">transmat_</span>
+
+<span class="c1"># Define the number of TPM propagations to evaluate (i.e., powers of the TPM), up to 1500 simulation steps</span>
+<span class="n">order_parameter</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">arange</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="nb">int</span><span class="p">(</span><span class="mi">1500</span> <span class="o">/</span> <span class="n">lagtime</span> <span class="o">+</span> <span class="mi">1</span><span class="p">))</span>
+
+<span class="c1"># Convert timepoints from simulation steps to nanoseconds (0.2 ns per step)</span>
+<span class="n">msm_time</span> <span class="o">=</span> <span class="n">order_parameter</span> <span class="o">*</span> <span class="n">lagtime</span> <span class="o">*</span> <span class="mf">0.2</span>
+
+<span class="c1"># Compute the TPM raised to successive powers (i.e., TPM ** i), giving transition probabilities over longer times</span>
+<span class="c1"># Each TPM ** i gives the probability of transitioning from state j to k in (i * lagtime) steps</span>
+<span class="n">msm_TPM</span> <span class="o">=</span> <span class="p">[]</span>
+<span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="n">order_parameter</span><span class="p">:</span>
+    <span class="n">msm_TPM</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">linalg</span><span class="o">.</span><span class="n">matrix_power</span><span class="p">(</span><span class="n">transmat</span><span class="p">,</span> <span class="n">i</span><span class="p">))</span>
+
+<span class="c1"># Convert the list of TPMs into a NumPy array for further analysis or plotting</span>
+<span class="n">msm_TPM</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">(</span><span class="n">msm_TPM</span><span class="p">)</span>
+</pre></div>
+</div>
+</div>
+</section>
+<section id="Perform-a-Chapman-Kolmogorov-(CK)-Test:">
+<h2>Perform a Chapman-Kolmogorov (CK) Test:<a class="headerlink" href="#Perform-a-Chapman-Kolmogorov-(CK)-Test:" title="Link to this heading">¶</a></h2>
+<ul class="simple">
+<li><p>This test is done to evaluate the markovian quality of the model by comparing the <strong>MSM-predicted multi-step residence probabilities (from ``msm_TPM``)</strong> with the <strong>Empirical bootstrapped MD estimates (from ``bootstrap_TPM``)</strong></p></li>
+</ul>
+<div class="nbinput docutils container">
+<div class="prompt highlight-none notranslate"><div class="highlight"><pre><span></span>[17]:
+</pre></div>
+</div>
+<div class="input_area highlight-ipython3 notranslate"><div class="highlight"><pre><span></span><span class="kn">import</span> <span class="nn">matplotlib.pyplot</span> <span class="k">as</span> <span class="nn">plt</span>
+<span class="kn">import</span> <span class="nn">numpy</span> <span class="k">as</span> <span class="nn">np</span>
+
+<span class="c1"># Font and axis style</span>
+<span class="n">plt</span><span class="o">.</span><span class="n">rcParams</span><span class="p">[</span><span class="s1">&#39;font.size&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="mf">17.5</span>
+<span class="n">plt</span><span class="o">.</span><span class="n">rcParams</span><span class="p">[</span><span class="s1">&#39;axes.linewidth&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="mi">2</span>
+
+<span class="c1"># Compute mean and std</span>
+<span class="n">TPM_mean</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">mean</span><span class="p">(</span><span class="n">bootstrap_TPM</span><span class="p">,</span> <span class="n">axis</span><span class="o">=</span><span class="mi">0</span><span class="p">)</span>
+<span class="n">TPM_std</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">std</span><span class="p">(</span><span class="n">bootstrap_TPM</span><span class="p">,</span> <span class="n">axis</span><span class="o">=</span><span class="mi">0</span><span class="p">)</span>
+
+<span class="n">color_msm</span> <span class="o">=</span> <span class="s1">&#39;#D55E00&#39;</span>
+<span class="n">color_md</span> <span class="o">=</span> <span class="s1">&#39;#999999&#39;</span>   <span class="c1"># gray</span>
+
+<span class="c1"># Create subplots</span>
+<span class="n">fig</span><span class="p">,</span> <span class="n">axes</span> <span class="o">=</span> <span class="n">plt</span><span class="o">.</span><span class="n">subplots</span><span class="p">(</span><span class="mi">2</span><span class="p">,</span> <span class="mi">2</span><span class="p">,</span> <span class="n">figsize</span><span class="o">=</span><span class="p">(</span><span class="mi">9</span><span class="p">,</span> <span class="mf">7.5</span><span class="p">),</span> <span class="n">sharex</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">sharey</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+<span class="n">axes</span> <span class="o">=</span> <span class="n">axes</span><span class="o">.</span><span class="n">flatten</span><span class="p">()</span>
+
+<span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">n_states</span><span class="p">):</span>
+    <span class="n">ax</span> <span class="o">=</span> <span class="n">axes</span><span class="p">[</span><span class="n">i</span><span class="p">]</span>
+
+    <span class="c1"># MD error bars</span>
+    <span class="n">ax</span><span class="o">.</span><span class="n">errorbar</span><span class="p">(</span><span class="n">x</span><span class="o">=</span><span class="n">lt</span> <span class="o">*</span> <span class="mf">0.2</span><span class="p">,</span> <span class="n">y</span><span class="o">=</span><span class="n">TPM_mean</span><span class="p">[:,</span> <span class="n">i</span><span class="p">,</span> <span class="n">i</span><span class="p">],</span> <span class="n">yerr</span><span class="o">=</span><span class="n">TPM_std</span><span class="p">[:,</span> <span class="n">i</span><span class="p">,</span> <span class="n">i</span><span class="p">],</span> <span class="n">fmt</span><span class="o">=</span><span class="s1">&#39;s&#39;</span><span class="p">,</span> <span class="n">capsize</span><span class="o">=</span><span class="mi">4</span><span class="p">,</span> <span class="n">elinewidth</span><span class="o">=</span><span class="mf">2.5</span><span class="p">,</span> <span class="n">markersize</span><span class="o">=</span><span class="mi">6</span><span class="p">,</span>
+                <span class="n">color</span><span class="o">=</span><span class="n">color_md</span><span class="p">,</span> <span class="n">ecolor</span><span class="o">=</span><span class="n">color_md</span><span class="p">,</span> <span class="n">zorder</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span> <span class="n">label</span><span class="o">=</span><span class="s1">&#39;MD&#39;</span> <span class="k">if</span> <span class="n">i</span> <span class="o">==</span> <span class="mi">0</span> <span class="k">else</span> <span class="kc">None</span><span class="p">)</span>
+
+    <span class="c1"># MSM predictions as dark blue circles</span>
+    <span class="n">ax</span><span class="o">.</span><span class="n">scatter</span><span class="p">(</span><span class="n">msm_time</span><span class="p">,</span> <span class="n">msm_TPM</span><span class="p">[:,</span> <span class="n">i</span><span class="p">,</span> <span class="n">i</span><span class="p">],</span> <span class="n">c</span><span class="o">=</span><span class="n">color_msm</span><span class="p">,</span> <span class="n">edgecolor</span><span class="o">=</span><span class="s1">&#39;k&#39;</span><span class="p">,</span> <span class="n">s</span><span class="o">=</span><span class="mi">80</span><span class="p">,</span> <span class="n">zorder</span><span class="o">=</span><span class="mi">3</span><span class="p">,</span> <span class="n">label</span><span class="o">=</span><span class="s1">&#39;TSDAR-MSM&#39;</span> <span class="k">if</span> <span class="n">i</span> <span class="o">==</span> <span class="mi">0</span> <span class="k">else</span> <span class="kc">None</span><span class="p">)</span>
+
+    <span class="c1"># State label</span>
+    <span class="n">ax</span><span class="o">.</span><span class="n">text</span><span class="p">(</span><span class="mf">0.95</span><span class="p">,</span> <span class="mf">0.10</span><span class="p">,</span> <span class="sa">f</span><span class="s1">&#39;State </span><span class="si">{</span><span class="n">i</span><span class="o">+</span><span class="mi">1</span><span class="si">}</span><span class="s1">&#39;</span><span class="p">,</span> <span class="n">ha</span><span class="o">=</span><span class="s1">&#39;right&#39;</span><span class="p">,</span> <span class="n">va</span><span class="o">=</span><span class="s1">&#39;bottom&#39;</span><span class="p">,</span> <span class="n">transform</span><span class="o">=</span><span class="n">ax</span><span class="o">.</span><span class="n">transAxes</span><span class="p">,</span> <span class="n">fontsize</span><span class="o">=</span><span class="mi">20</span><span class="p">)</span>
+
+    <span class="n">ax</span><span class="o">.</span><span class="n">set_ylim</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="mf">1.05</span><span class="p">)</span>
+    <span class="n">ax</span><span class="o">.</span><span class="n">set_xlim</span><span class="p">(</span><span class="nb">min</span><span class="p">(</span><span class="n">lt</span> <span class="o">*</span> <span class="mf">0.2</span><span class="p">),</span> <span class="nb">max</span><span class="p">(</span><span class="n">lt</span> <span class="o">*</span> <span class="mf">0.2</span><span class="p">))</span>
+    <span class="n">ax</span><span class="o">.</span><span class="n">set_xticks</span><span class="p">([</span><span class="mi">100</span><span class="p">,</span> <span class="mi">200</span><span class="p">,</span> <span class="mi">300</span><span class="p">])</span>
+    <span class="n">ax</span><span class="o">.</span><span class="n">set_yticks</span><span class="p">([</span><span class="mf">0.0</span><span class="p">,</span> <span class="mf">0.5</span><span class="p">,</span> <span class="mf">1.0</span><span class="p">])</span>
+    <span class="n">ax</span><span class="o">.</span><span class="n">tick_params</span><span class="p">(</span><span class="n">axis</span><span class="o">=</span><span class="s1">&#39;both&#39;</span><span class="p">,</span> <span class="n">direction</span><span class="o">=</span><span class="s1">&#39;in&#39;</span><span class="p">,</span> <span class="n">width</span><span class="o">=</span><span class="mi">2</span><span class="p">,</span> <span class="n">length</span><span class="o">=</span><span class="mi">6</span><span class="p">)</span>
+
+    <span class="c1"># Add clean gridlines</span>
+    <span class="n">ax</span><span class="o">.</span><span class="n">grid</span><span class="p">(</span><span class="kc">True</span><span class="p">,</span> <span class="n">linestyle</span><span class="o">=</span><span class="s1">&#39;--&#39;</span><span class="p">,</span> <span class="n">linewidth</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span> <span class="n">alpha</span><span class="o">=</span><span class="mf">0.3</span><span class="p">)</span>
+
+    <span class="c1"># Border thickness</span>
+    <span class="k">for</span> <span class="n">spine</span> <span class="ow">in</span> <span class="n">ax</span><span class="o">.</span><span class="n">spines</span><span class="o">.</span><span class="n">values</span><span class="p">():</span>
+        <span class="n">spine</span><span class="o">.</span><span class="n">set_linewidth</span><span class="p">(</span><span class="mi">2</span><span class="p">)</span>
+
+<span class="c1"># Axis labels</span>
+<span class="n">fig</span><span class="o">.</span><span class="n">text</span><span class="p">(</span><span class="mf">0.54</span><span class="p">,</span> <span class="mf">0.04</span><span class="p">,</span> <span class="s1">&#39;Lag Time (ns)&#39;</span><span class="p">,</span> <span class="n">ha</span><span class="o">=</span><span class="s1">&#39;center&#39;</span><span class="p">,</span> <span class="n">fontsize</span><span class="o">=</span><span class="mi">22</span><span class="p">)</span>
+<span class="n">fig</span><span class="o">.</span><span class="n">text</span><span class="p">(</span><span class="mf">0.04</span><span class="p">,</span> <span class="mf">0.5</span><span class="p">,</span> <span class="s1">&#39;Residence Probability&#39;</span><span class="p">,</span> <span class="n">va</span><span class="o">=</span><span class="s1">&#39;center&#39;</span><span class="p">,</span> <span class="n">rotation</span><span class="o">=</span><span class="s1">&#39;vertical&#39;</span><span class="p">,</span> <span class="n">fontsize</span><span class="o">=</span><span class="mi">22</span><span class="p">)</span>
+
+<span class="c1"># Unified legend</span>
+<span class="n">handles</span><span class="p">,</span> <span class="n">labels</span> <span class="o">=</span> <span class="p">[],</span> <span class="p">[]</span>
+<span class="k">for</span> <span class="n">ax</span> <span class="ow">in</span> <span class="n">axes</span><span class="p">:</span>
+    <span class="k">for</span> <span class="n">h</span><span class="p">,</span> <span class="n">l</span> <span class="ow">in</span> <span class="nb">zip</span><span class="p">(</span><span class="o">*</span><span class="n">ax</span><span class="o">.</span><span class="n">get_legend_handles_labels</span><span class="p">()):</span>
+        <span class="k">if</span> <span class="n">l</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">labels</span><span class="p">:</span>
+            <span class="n">handles</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">h</span><span class="p">)</span>
+            <span class="n">labels</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">l</span><span class="p">)</span>
+
+<span class="n">fig</span><span class="o">.</span><span class="n">legend</span><span class="p">(</span><span class="n">handles</span><span class="p">,</span> <span class="n">labels</span><span class="p">,</span> <span class="n">loc</span><span class="o">=</span><span class="s1">&#39;upper center&#39;</span><span class="p">,</span> <span class="n">bbox_to_anchor</span><span class="o">=</span><span class="p">(</span><span class="mf">0.5</span><span class="p">,</span> <span class="mf">1.05</span><span class="p">),</span>
+           <span class="n">ncol</span><span class="o">=</span><span class="mi">2</span><span class="p">,</span> <span class="n">fontsize</span><span class="o">=</span><span class="mf">17.5</span><span class="p">,</span> <span class="n">frameon</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
+
+<span class="n">plt</span><span class="o">.</span><span class="n">tight_layout</span><span class="p">(</span><span class="n">rect</span><span class="o">=</span><span class="p">[</span><span class="mf">0.05</span><span class="p">,</span> <span class="mf">0.05</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="mf">0.98</span><span class="p">])</span>
+<span class="n">plt</span><span class="o">.</span><span class="n">subplots_adjust</span><span class="p">(</span><span class="n">wspace</span><span class="o">=</span><span class="mf">0.25</span><span class="p">,</span> <span class="n">hspace</span><span class="o">=</span><span class="mf">0.3</span><span class="p">)</span>
+<span class="n">plt</span><span class="o">.</span><span class="n">show</span><span class="p">()</span>
+</pre></div>
+</div>
+</div>
+<div class="nboutput nblast docutils container">
+<div class="prompt empty docutils container">
+</div>
+<div class="output_area docutils container">
+<img alt="../../_images/examples_hp35_HP35_29_0.png" src="../../_images/examples_hp35_HP35_29_0.png" />
+</div>
+</div>
+<div class="nbinput nblast docutils container">
+<div class="prompt highlight-none notranslate"><div class="highlight"><pre><span></span>[ ]:
+</pre></div>
+</div>
+<div class="input_area highlight-ipython3 notranslate"><div class="highlight"><pre><span></span>
+</pre></div>
+</div>
+</div>
+</section>
+</section>
+
+
+          </div>
+          
+        </div>
+      </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="main navigation">
+        <div class="sphinxsidebarwrapper">
+<h1 class="logo"><a href="../../index.html">TS-DAR Example Gallery</a></h1>
+
+
+
+
+
+
+
+
+<h3>Navigation</h3>
+<p class="caption" role="heading"><span class="caption-text">Contents:</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../overview.html">TS-DAR Overview</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../examples.html">Example Notebook Gallery</a></li>
+</ul>
+
+<div class="relations">
+<h3>Related Topics</h3>
+<ul>
+  <li><a href="../../index.html">Documentation overview</a><ul>
+  </ul></li>
+</ul>
+</div>
+<search id="searchbox" style="display: none" role="search">
+  <h3 id="searchlabel">Quick search</h3>
+    <div class="searchformwrapper">
+    <form class="search" action="../../search.html" method="get">
+      <input type="text" name="q" aria-labelledby="searchlabel" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"/>
+      <input type="submit" value="Go" />
+    </form>
+    </div>
+</search>
+<script>document.getElementById('searchbox').style.display = "block"</script>
+
+
+
+
+
+
+
+
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="footer">
+      &#169;2025, Michael O'Connor.
+      
+      |
+      Powered by <a href="https://www.sphinx-doc.org/">Sphinx 7.3.7</a>
+      &amp; <a href="https://alabaster.readthedocs.io">Alabaster 0.7.16</a>
+      
+      |
+      <a href="../../_sources/examples/hp35/HP35.ipynb.txt"
+          rel="nofollow">Page source</a>
+    </div>
+
+    
+
+    
+  </body>
+</html>

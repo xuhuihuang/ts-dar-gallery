@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+
+<html lang="en" data-content_root="./">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="generator" content="Docutils 0.18.1: http://docutils.sourceforge.net/" />
+
+    <title>TS-DAR Overview &#8212; TS-DAR Example Gallery 1 documentation</title>
+    <link rel="stylesheet" type="text/css" href="_static/pygments.css?v=61cd365c" />
+    <link rel="stylesheet" type="text/css" href="_static/alabaster.css?v=12dfc556" />
+    <link rel="stylesheet" type="text/css" href="_static/sg_gallery.css?v=d2d258e8" />
+    <script src="_static/documentation_options.js?v=29a6c3e3"></script>
+    <script src="_static/doctools.js?v=9a2dae69"></script>
+    <script src="_static/sphinx_highlight.js?v=dc90522c"></script>
+    <script crossorigin="anonymous" integrity="sha256-Ae2Vz/4ePdIu6ZyI/5ZGsYnb+m0JlOmKPjt6XZ9JJkA=" src="https://cdnjs.cloudflare.com/ajax/libs/require.js/2.3.4/require.min.js"></script>
+    <link rel="index" title="Index" href="genindex.html" />
+    <link rel="search" title="Search" href="search.html" />
+    <link rel="next" title="Example Notebook Gallery" href="examples.html" />
+    <link rel="prev" title="Welcome to the TS-DAR Example Gallery!" href="index.html" />
+   
+  <link rel="stylesheet" href="_static/custom.css" type="text/css" />
+  
+
+  
+  
+
+  </head><body>
+  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          
+
+          <div class="body" role="main">
+            
+  <section id="ts-dar-overview">
+<h1>TS-DAR Overview<a class="headerlink" href="#ts-dar-overview" title="Link to this heading">¶</a></h1>
+<section id="abstract">
+<h2>Abstract<a class="headerlink" href="#abstract" title="Link to this heading">¶</a></h2>
+<p>Identifying transitional states is crucial for understanding protein conformational changes that underlie numerous biological processes. Markov state models (MSMs), built from Molecular Dynamics (MD) simulations, capture these dynamics through transitions among metastable conformational states, and have demonstrated success in studying protein conformational changes. However, MSMs face challenges in identifying transition states, as they partition MD conformations into discrete metastable states (or free energy minima), lacking description of transition states located at the free energy barriers. Here, we introduce Transition State identification via Dispersion and vAriational principle Regularized neural networks (TS-DAR), a deep learning framework inspired by out-of-distribution (OOD) detection in trustworthy artificial intelligence (AI). TS-DAR offers an end-to-end pipeline that can simultaneously detect all transition states between multiple free minima from MD simulations using the regularized hyperspherical embeddings in latent space. The key insight of TS-DAR lies in treating transition state structures as OOD data, recognizing that they are sparsely populated and exhibit a distributional shift from metastable states. We demonstrate the power of TS-DAR by applying it to a 2D potential, alanine dipeptide, and the translocation of a DNA motor protein on DNA, where it outperforms previous methods in identifying transition states.</p>
+<p>Link to TS-DAR GitHub: <a class="reference external" href="https://github.com/xuhuihuang/ts-dar">https://github.com/xuhuihuang/ts-dar</a></p>
+</section>
+<section id="tutorial">
+<h2>Tutorial<a class="headerlink" href="#tutorial" title="Link to this heading">¶</a></h2>
+<p>Link to tutorial GitHub: <a class="reference external" href="https://github.com/xuhuihuang/ts-dar-tutorials">https://github.com/xuhuihuang/ts-dar-tutorials</a></p>
+</section>
+</section>
+
+
+          </div>
+          
+        </div>
+      </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="main navigation">
+        <div class="sphinxsidebarwrapper">
+<h1 class="logo"><a href="index.html">TS-DAR Example Gallery</a></h1>
+
+
+
+
+
+
+
+
+<h3>Navigation</h3>
+<p class="caption" role="heading"><span class="caption-text">Contents:</span></p>
+<ul class="current">
+<li class="toctree-l1 current"><a class="current reference internal" href="#">TS-DAR Overview</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="#abstract">Abstract</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#tutorial">Tutorial</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="examples.html">Example Notebook Gallery</a></li>
+</ul>
+
+<div class="relations">
+<h3>Related Topics</h3>
+<ul>
+  <li><a href="index.html">Documentation overview</a><ul>
+      <li>Previous: <a href="index.html" title="previous chapter">Welcome to the TS-DAR Example Gallery!</a></li>
+      <li>Next: <a href="examples.html" title="next chapter">Example Notebook Gallery</a></li>
+  </ul></li>
+</ul>
+</div>
+<search id="searchbox" style="display: none" role="search">
+  <h3 id="searchlabel">Quick search</h3>
+    <div class="searchformwrapper">
+    <form class="search" action="search.html" method="get">
+      <input type="text" name="q" aria-labelledby="searchlabel" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"/>
+      <input type="submit" value="Go" />
+    </form>
+    </div>
+</search>
+<script>document.getElementById('searchbox').style.display = "block"</script>
+
+
+
+
+
+
+
+
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="footer">
+      &#169;2025, Michael O'Connor.
+      
+      |
+      Powered by <a href="https://www.sphinx-doc.org/">Sphinx 7.3.7</a>
+      &amp; <a href="https://alabaster.readthedocs.io">Alabaster 0.7.16</a>
+      
+      |
+      <a href="_sources/overview.rst.txt"
+          rel="nofollow">Page source</a>
+    </div>
+
+    
+
+    
+  </body>
+</html>

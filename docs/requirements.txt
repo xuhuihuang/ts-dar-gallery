@@ -1,0 +1,9 @@
+sphinx
+sphinx_gallery
+nbsphinx
+nbconvert
+nbformat
+sphinx-design
+sphinx-codeautolink
+pydata-sphinx-theme
+ipython
