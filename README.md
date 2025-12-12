@@ -1,5 +1,5 @@
-# ts-dar-gallery
-Tutorial gallery for TS-DAR
+# TS-DAR Gallery Website
+Example gallery for TS-DAR
 
 Tutorial Code: https://github.com/xuhuihuang/ts-dar-tutorials.git
 
