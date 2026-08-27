@@ -24,3 +24,11 @@ PP2A
    :maxdepth: 2
 
    examples/pp2a/*
+
+Hydrogen Catalysis
+^^^^^^^^^^^^^^^^^
+.. nbgallery::
+   :glob:
+   :maxdepth: 2
+
+   examples/h_catalysis/*
