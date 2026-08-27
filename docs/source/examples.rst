@@ -31,5 +31,5 @@ Hydrogen Catalysis
    :glob:
    :maxdepth: 2
 
-   examples/h_catalysis/h_catalysis_tsdar_tutorial.ipynb
+   examples/h_catalysis/*
 
